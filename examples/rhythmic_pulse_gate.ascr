@@ -1,0 +1,6 @@
+freq = 1.0 + p1 * 16.0;
+duty = 0.1 + p2 * 0.8;
+g = pulse(freq, duty);
+mask = gt(g, 0.0);
+outL = mix(inL * 0.15, inL, mask);
+outR = mix(inR * 0.15, inR, mask);

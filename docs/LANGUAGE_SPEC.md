@@ -47,6 +47,13 @@
 - `noise(seed)`
 - `lpf1(x, coeff [, id])`
 - `slew(target, speed [, id])`
+ - `noise(seed)`
+ - `gt(a, b)`, `lt(a, b)`, `ge(a, b)`, `le(a, b)`
+ - `select(cond, a, b)`
+ - `pulse(freqHz, duty)`
+ - `env(x, attack, release [, id])`
+ - `lpf1(x, coeff [, id])`
+ - `slew(target, speed [, id])`
 
 ## Error handling
 

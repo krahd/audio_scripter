@@ -113,6 +113,19 @@ struct FunctionCallExpr final : Expr
             return y;
         }
 
+        if (fn == "env")
+        {
+            const auto x = std::abs (values[0]);
+            const auto attack = juce::jlimit (0.0f, 1.0f, values[1]);
+            const auto release = juce::jlimit (0.0f, 1.0f, values[2]);
+            const int id = (int) (values.size() > 3 ? values[3] : 0.0f);
+            const auto key = "state_env_" + juce::String (id);
+            const auto current = ctx.getValue (key);
+            const auto coeff = x > current ? attack : release;
+            const auto y = coeff * x + (1.0f - coeff) * current;
+            ctx.setValue (key, y);
+            return y;
+        }
         if (fn == "clip") return juce::jlimit (values[1], values[2], values[0]);
         if (fn == "fold")
         {
@@ -136,6 +149,19 @@ struct FunctionCallExpr final : Expr
             return std::round (values[0] * steps) / steps;
         }
 
+        if (fn == "gt") return values[0] > values[1] ? 1.0f : 0.0f;
+        if (fn == "lt") return values[0] < values[1] ? 1.0f : 0.0f;
+        if (fn == "ge") return values[0] >= values[1] ? 1.0f : 0.0f;
+        if (fn == "le") return values[0] <= values[1] ? 1.0f : 0.0f;
+        if (fn == "select") return values[0] >= 0.5f ? values[1] : values[2];
+
+        if (fn == "pulse")
+        {
+            const auto freq = std::max (0.0f, values[0]);
+            const auto duty = juce::jlimit (0.0f, 1.0f, values[1]);
+            const auto phase = std::fmod (ctx.t * freq, 1.0f);
+            return phase < duty ? 1.0f : -1.0f;
+        }
         if (fn == "smoothstep")
         {
             const auto edge0 = values[0];
@@ -167,12 +193,13 @@ bool checkArity (const juce::String& fn, int arity)
     static const std::map<juce::String, int> map {
         { "sin", 1 }, { "cos", 1 }, { "tan", 1 }, { "abs", 1 }, { "sqrt", 1 },
         { "exp", 1 }, { "log", 1 }, { "pow", 2 }, { "min", 2 }, { "max", 2 },
-        { "clamp", 3 }, { "mix", 3 }, { "wrap", 3 }, { "tanh", 1 }, { "clip", 3 }, { "fold", 3 }, { "crush", 2 }, { "smoothstep", 3 }, { "noise", 1 }
+        { "clamp", 3 }, { "mix", 3 }, { "wrap", 3 }, { "tanh", 1 }, { "clip", 3 }, { "fold", 3 }, { "crush", 2 }, { "smoothstep", 3 }, { "noise", 1 }, { "gt", 2 }, { "lt", 2 }, { "ge", 2 }, { "le", 2 }, { "select", 3 }, { "pulse", 2 }, { "env", 3 }
     };
 
     if (name == "lpf1" || name == "slew")
         return arity == 2 || arity == 3;
-
+        if (name == "env")
+        return arity == 3 || arity == 4;
     const auto it = map.find (name);
     return it != map.end() && it->second == arity;
 }

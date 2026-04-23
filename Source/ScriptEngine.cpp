@@ -50,29 +50,7 @@ void ScriptEngine::processBlock (juce::AudioBuffer<float>& buffer, const std::ar
 
     const auto program = getProgramSnapshot();
     if (program == nullptr)
-        return;
-
-    const auto numChannels = buffer.getNumChannels();
-    const auto numSamples = buffer.getNumSamples();
-
-    for (int s = 0; s < numSamples; ++s)
-    {
-        EvalContext ctx;
-        ctx.inL = numChannels > 0 ? buffer.getSample (0, s) : 0.0f;
-        ctx.inR = numChannels > 1 ? buffer.getSample (1, s) : ctx.inL;
-        ctx.outL = ctx.inL;
-        ctx.outR = ctx.inR;
-        ctx.sr = (float) currentSampleRate;
-        ctx.t = (float) (sampleCounter / currentSampleRate);
-        ctx.persistentState = &persistentState;
-        ctx.macros = &macros;
-
-        for (const auto& st : program->program.statements)
-        {
-            const auto value = st.expression->evaluate (ctx);
-            ctx.setValue (st.variableName, value);
-        }
-
+        )
         if (numChannels > 0)
             buffer.setSample (0, s, ctx.outL);
 
@@ -104,7 +82,9 @@ juce::StringArray exampleNames()
         "Low-pass morph",
         "Wavefold shimmer",
         "Stereo bit crush drift",
-        "Noisy transient gate"
+    "Noisy transient gate",
+    "Rhythmic pulse gate",
+    "Envelope duck tremor"
     };
 }
 
@@ -164,6 +144,25 @@ n = noise(3.0 + p2 * 20.0) * (0.02 + p1 * 0.25);
 outL = inL + n * gL;
 outR = inR + n * gR;
 )";
+        case 7:
+            return R"(# synced pulse gating with blend control
+freq = 1.0 + p1 * 16.0;
+duty = 0.1 + p2 * 0.8;
+g = pulse(freq, duty);
+mask = gt(g, 0.0);
+outL = mix(inL * 0.15, inL, mask);
+outR = mix(inR * 0.15, inR, mask);
+)";
+        case 8:
+            return R"(# envelope follower ducks a moving tremolo
+envL = env(inL, 0.25, 0.01, 0);
+envR = env(inR, 0.25, 0.01, 1);
+mod = 0.5 + 0.5 * pulse(2.0 + p1 * 8.0, 0.5);
+depthL = clamp((1.0 - envL * (0.7 + p2)), 0.2, 1.0);
+depthR = clamp((1.0 - envR * (0.7 + p2)), 0.2, 1.0);
+outL = inL * mix(depthL, 1.0, mod);
+outR = inR * mix(depthR, 1.0, mod);
+)";
         default:
             break;
     }
@@ -201,6 +200,10 @@ Functions
 - crush(x, steps)
 - smoothstep(edge0, edge1, x)
 - noise(seed)
+- gt(a,b), lt(a,b), ge(a,b), le(a,b)
+- select(cond, a, b)
+- pulse(freqHz, duty)
+- env(x, attack, release [, id])
 - lpf1(x, coeff [, id])      # one-pole low-pass (stateful)
 - slew(target, speed [, id]) # slew limiter (stateful)
 

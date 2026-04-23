@@ -11,7 +11,7 @@ EXAMPLES = ROOT / "examples"
 
 ALLOWED_FUNCTIONS = {
     "sin", "cos", "tan", "abs", "sqrt", "exp", "log", "tanh", "pow",
-    "min", "max", "clamp", "clip", "mix", "wrap", "fold", "crush", "smoothstep", "noise", "lpf1", "slew",
+    "min", "max", "clamp", "clip", "mix", "wrap", "fold", "crush", "smoothstep", "noise", "gt", "lt", "ge", "le", "select", "pulse", "env", "lpf1", "slew",
 }
 
 FUNCTION_RE = re.compile(r"\b([A-Za-z_][A-Za-z0-9_]*)\s*\(")
