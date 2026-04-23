@@ -1,0 +1,7 @@
+envL = env(inL, 0.25, 0.01, 0);
+envR = env(inR, 0.25, 0.01, 1);
+mod = 0.5 + 0.5 * pulse(2.0 + p1 * 8.0, 0.5);
+depthL = clamp((1.0 - envL * (0.7 + p2)), 0.2, 1.0);
+depthR = clamp((1.0 - envR * (0.7 + p2)), 0.2, 1.0);
+outL = inL * mix(depthL, 1.0, mod);
+outR = inR * mix(depthR, 1.0, mod);

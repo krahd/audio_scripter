@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.0.4 - 2026-04-23
+
+### Added
+- New envelope follower primitive: `env(x, attack, release [, id])`.
+- New example script: `examples/envelope_duck_tremor.ascr`.
+
+### Changed
+- Built-in example browser now includes "Envelope duck tremor".
+- Validator/docs updated for `env` function support.
+
+## 1.0.3 - 2026-04-23
+
+### Added
+- New comparator/control functions: `gt`, `lt`, `ge`, `le`, `select`.
+- New timing utility: `pulse(freqHz, duty)`.
+- New example script: `examples/rhythmic_pulse_gate.ascr`.
+
+### Changed
+- Example browser and docs updated for the new control/timing primitives.
+- Script validator allowlist expanded for new functions.
+
 ## 1.0.2 - 2026-04-23
 
 ### Added
