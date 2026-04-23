@@ -145,6 +145,15 @@ Scripts in `examples/` and GUI dropdown include:
 
 ## Local checks
 
+## Screenshots
+
+Below are placeholder screenshots. Replace these with real captures from the editor and plugin UI.
+
+![Editor screenshot](docs/screenshots/editor.svg)
+
+![Plugin UI screenshot](docs/screenshots/plugin.svg)
+
+
 ```bash
 python3 tools/validate_scripts.py
 ```
