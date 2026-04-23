@@ -1,0 +1,7 @@
+envL = abs(inL);
+envR = abs(inR);
+gL = smoothstep(0.02, 0.25, envL);
+gR = smoothstep(0.02, 0.25, envR);
+n = noise(3.0 + p2 * 20.0) * (0.02 + p1 * 0.25);
+outL = inL + n * gL;
+outR = inR + n * gR;
