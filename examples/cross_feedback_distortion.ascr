@@ -1,0 +1,4 @@
+xL = tanh(inL * 3.0 + inR * 1.7);
+xR = tanh(inR * 3.0 + inL * 1.7);
+outL = xL * 0.8;
+outR = xR * 0.8;
