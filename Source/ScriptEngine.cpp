@@ -47,16 +47,39 @@ void ScriptEngine::processBlock (juce::AudioBuffer<float>& buffer, const std::ar
         persistentState.clear();
         sampleCounter = 0;
     }
-
     const auto program = getProgramSnapshot();
+    const int numChannels = buffer.getNumChannels();
+    const int numSamples = buffer.getNumSamples();
+
     if (program == nullptr)
-        )
+    {
+        sampleCounter += (uint64_t) numSamples;
+        return;
+    }
+
+    for (int s = 0; s < numSamples; ++s)
+    {
+        EvalContext ctx;
+        ctx.sr = (float) currentSampleRate;
+        ctx.t = (float) sampleCounter / (float) currentSampleRate;
+        ctx.macros = &macros;
+        ctx.persistentState = &persistentState;
+
+        ctx.inL = numChannels > 0 ? buffer.getSample (0, s) : 0.0f;
+        ctx.inR = numChannels > 1 ? buffer.getSample (1, s) : ctx.inL;
+        ctx.outL = 0.0f;
+        ctx.outR = 0.0f;
+
+        for (const auto& stmt : program->program.statements)
+        {
+            const float val = stmt.expression->evaluate (ctx);
+            ctx.setValue (stmt.variableName, val);
+        }
+
         if (numChannels > 0)
             buffer.setSample (0, s, ctx.outL);
-
         if (numChannels > 1)
             buffer.setSample (1, s, ctx.outR);
-
         for (int ch = 2; ch < numChannels; ++ch)
             buffer.setSample (ch, s, 0.5f * (ctx.outL + ctx.outR));
 

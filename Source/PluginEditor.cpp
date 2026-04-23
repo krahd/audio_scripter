@@ -165,35 +165,54 @@ void AudioScripterAudioProcessorEditor::applyScript()
 
 void AudioScripterAudioProcessorEditor::saveScriptToFile()
 {
-    juce::FileChooser chooser ("Save script", lastScriptDirectory, "*.ascr");
+    auto chooser = std::make_shared<juce::FileChooser> ("Save script", lastScriptDirectory, "*.ascr");
 
-    if (! chooser.browseForFileToSave (true))
-        return;
+    chooser->launchAsync (
+        juce::FileBrowserComponent::saveMode | juce::FileBrowserComponent::canSelectFiles | juce::FileBrowserComponent::warnAboutOverwriting,
+        [this, chooser] (const juce::FileChooser& fc)
+        {
+            const auto file = fc.getResult();
+            if (file.getFullPathName().isEmpty())
+                return;
 
-    auto file = chooser.getResult();
-    lastScriptDirectory = file.getParentDirectory();
+            lastScriptDirectory = file.getParentDirectory();
+            const bool ok = file.replaceWithText (scriptEditor.getText());
 
-    if (file.replaceWithText (scriptEditor.getText()))
-    {
-        outputPanel.setColour (juce::TextEditor::textColourId, juce::Colours::lightgreen);
-        outputPanel.setText ("Saved script to: " + file.getFullPathName());
-    }
-    else
-    {
-        outputPanel.setColour (juce::TextEditor::textColourId, juce::Colours::red);
-        outputPanel.setText ("Could not save script.");
-    }
+            juce::MessageManager::callAsync ([this, ok, file]
+            {
+                if (ok)
+                {
+                    outputPanel.setColour (juce::TextEditor::textColourId, juce::Colours::lightgreen);
+                    outputPanel.setText ("Saved script to: " + file.getFullPathName());
+                }
+                else
+                {
+                    outputPanel.setColour (juce::TextEditor::textColourId, juce::Colours::red);
+                    outputPanel.setText ("Could not save script.");
+                }
+            });
+        });
 }
 
 void AudioScripterAudioProcessorEditor::loadScriptFromFile()
 {
-    juce::FileChooser chooser ("Load script", lastScriptDirectory, "*.ascr");
+    auto chooser = std::make_shared<juce::FileChooser> ("Load script", lastScriptDirectory, "*.ascr");
 
-    if (! chooser.browseForFileToOpen())
-        return;
+    chooser->launchAsync (
+        juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
+        [this, chooser] (const juce::FileChooser& fc)
+        {
+            const auto file = fc.getResult();
+            if (file.getFullPathName().isEmpty())
+                return;
 
-    const auto file = chooser.getResult();
-    lastScriptDirectory = file.getParentDirectory();
-    scriptEditor.setText (file.loadFileAsString());
-    outputPanel.setText ("Loaded: " + file.getFullPathName());
+            lastScriptDirectory = file.getParentDirectory();
+            const auto text = file.loadFileAsString();
+
+            juce::MessageManager::callAsync ([this, text, file]
+            {
+                scriptEditor.setText (text);
+                outputPanel.setText ("Loaded: " + file.getFullPathName());
+            });
+        });
 }

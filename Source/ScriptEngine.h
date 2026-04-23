@@ -1,5 +1,6 @@
 #pragma once
 
+#include <JuceHeader.h>
 #include "ScriptParser.h"
 #include <atomic>
 
@@ -30,7 +31,7 @@ public:
 private:
     std::shared_ptr<const CompiledProgram> getProgramSnapshot() const;
 
-    std::atomic<std::shared_ptr<const CompiledProgram>> activeProgram;
+    std::shared_ptr<const CompiledProgram> activeProgram;
     std::map<juce::String, float> persistentState;
     std::atomic<bool> stateResetRequested { false };
     double currentSampleRate { 44100.0 };

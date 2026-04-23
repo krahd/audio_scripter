@@ -49,6 +49,10 @@ target_compile_definitions(audio_scripter PRIVATE
   JUCE_WEB_BROWSER=0
   JUCE_USE_CURL=0)
 
+# Suppress JUCE VST3/VST2 parameter ID mismatch error for local builds
+target_compile_definitions(audio_scripter PRIVATE
+  JUCE_IGNORE_VST3_MISMATCHED_PARAMETER_ID_WARNING=1)
+
 target_link_libraries(audio_scripter PRIVATE
   juce::juce_audio_utils
   juce::juce_dsp
