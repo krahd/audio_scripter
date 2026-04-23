@@ -1,0 +1,4 @@
+phase = wrap(t * 0.31, 0.0, 1.0);
+mod = sin(6.2831853 * (80.0 + phase * 700.0) * t);
+outL = inL * mod;
+outR = inR * mod;

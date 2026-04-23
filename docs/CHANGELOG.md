@@ -1,0 +1,49 @@
+# Changelog
+
+## 1.0.4 - 2026-04-23
+
+### Added
+- New envelope follower primitive: `env(x, attack, release [, id])`.
+- New example script: `examples/envelope_duck_tremor.ascr`.
+
+### Changed
+- Built-in example browser now includes "Envelope duck tremor".
+- Validator/docs updated for `env` function support.
+
+## 1.0.3 - 2026-04-23
+
+### Added
+- New comparator/control functions: `gt`, `lt`, `ge`, `le`, `select`.
+- New timing utility: `pulse(freqHz, duty)`.
+- New example script: `examples/rhythmic_pulse_gate.ascr`.
+
+### Changed
+- Example browser and docs updated for the new control/timing primitives.
+- Script validator allowlist expanded for new functions.
+
+## 1.0.2 - 2026-04-23
+
+### Added
+- New language functions: `smoothstep(edge0, edge1, x)` and deterministic pseudo-random `noise(seed)`.
+- New example script: `examples/noisy_transient_gate.ascr`.
+
+### Changed
+- Example browser now includes "Noisy transient gate".
+- `tools/validate_scripts.py` updated to validate the new function names.
+
+## 1.0.1 - 2026-04-23
+
+### Added
+- 8 macro parameters (`p1..p8`) wired to DAW automation and script runtime.
+- Script size guard (256 statements max).
+- Empty-script compile validation.
+- New examples: `wavefold_shimmer`, `stereo_bit_crush_drift`.
+- Language and release documentation updates.
+
+### Changed
+- Runtime upgraded to lock-free compiled program swapping (atomic snapshot model).
+- Default script now demonstrates macro-driven drive control using `p1`.
+- Plugin state serialization now includes both script source and parameter tree state.
+
+### Notes
+- Build supports either local JUCE path (`AUDIO_SCRIPTER_JUCE_PATH`) or FetchContent clone.

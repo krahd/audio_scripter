@@ -1,0 +1,4 @@
+preL = inL * 5.0;
+preR = inR * 5.0;
+outL = tanh(fold(preL, -0.7, 0.7)) * 0.8;
+outR = tanh(fold(preR, -0.7, 0.7)) * 0.8;

@@ -1,0 +1,5 @@
+steps = 8.0 + 7.0 * sin(t * 0.29);
+cL = crush(inL, steps);
+cR = crush(inR, steps + 2.0);
+outL = slew(cL, 0.025, 0);
+outR = slew(cR, 0.020, 1);

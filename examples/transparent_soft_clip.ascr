@@ -1,0 +1,2 @@
+outL = tanh(inL * 2.7) * 0.7;
+outR = tanh(inR * 2.7) * 0.7;
