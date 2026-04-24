@@ -13,7 +13,7 @@ AudioScripterAudioProcessorEditor::AudioScripterAudioProcessorEditor (AudioScrip
 {
     setSize (1020, 760);
 
-    titleLabel.setText ("audio_scripter 1.0 — script your own impossible effects", juce::dontSendNotification);
+    titleLabel.setText ("audio_scripter 1.0.5 — script your own impossible effects", juce::dontSendNotification);
     titleLabel.setJustificationType (juce::Justification::centredLeft);
     titleLabel.setFont (juce::FontOptions (18.0f, juce::Font::bold));
     addAndMakeVisible (titleLabel);

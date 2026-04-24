@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.5 - 2026-04-24
+
+### Changed
+- Bump version to `1.0.5` and update packaging, docs, and minor build fixes.
+- Add editor and plugin screenshots to documentation.
+
 ## 1.0.4 - 2026-04-23
 
 ### Added
