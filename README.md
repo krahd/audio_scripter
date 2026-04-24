@@ -149,9 +149,9 @@ Scripts in `examples/` and GUI dropdown include:
 
 Below are placeholder screenshots. Replace these with real captures from the editor and plugin UI.
 
-![Editor screenshot](docs/screenshots/editor.svg)
+![Editor screenshot](docs/screenshots/editor.png)
 
-![Plugin UI screenshot](docs/screenshots/plugin.svg)
+![Plugin UI screenshot](docs/screenshots/plugin.png)
 
 
 ```bash
