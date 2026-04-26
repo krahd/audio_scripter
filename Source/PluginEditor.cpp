@@ -1,12 +1,5 @@
 #include "PluginEditor.h"
 
-namespace
-{
-juce::String macroParamId (int index)
-{
-    return "macro" + juce::String (index + 1);
-}
-} // namespace
 
 AudioScripterAudioProcessorEditor::AudioScripterAudioProcessorEditor (AudioScripterAudioProcessor& p)
     : AudioProcessorEditor (&p), processor (p)
@@ -212,6 +205,7 @@ void AudioScripterAudioProcessorEditor::loadScriptFromFile()
             juce::MessageManager::callAsync ([this, text, file]
             {
                 scriptEditor.setText (text);
+                outputPanel.setColour (juce::TextEditor::textColourId, juce::Colours::lightgreen);
                 outputPanel.setText ("Loaded: " + file.getFullPathName());
             });
         });

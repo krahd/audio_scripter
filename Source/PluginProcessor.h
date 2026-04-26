@@ -4,6 +4,13 @@
 #include <array>
 #include "ScriptEngine.h"
 
+inline constexpr int kNumMacros = 8;
+
+inline juce::String macroParamId (int index)
+{
+    return "macro" + juce::String (index + 1);
+}
+
 class AudioScripterAudioProcessor final : public juce::AudioProcessor
 {
 public:

@@ -30,6 +30,18 @@
 
 ## Functions
 
+### Extensible Function Registry
+
+audio_scripter supports both built-in and user-defined functions. The function registry is extensible:
+
+- **Built-in functions** are registered in C++ (see ScriptEngine::compileAndInstall).
+- **User-defined functions** are written in script using `fn name(args) { ... }`.
+
+#### Adding a New DSP Function (for developers)
+1. Implement a C++ lambda or function matching `float(EvalContext&, const std::vector<float>&)`.
+2. Register it in `ScriptEngine::compileAndInstall` via `functionRegistry.builtins["name"] = ...;`
+3. Document its usage here.
+
 ### Math
 - `sin(x)`, `cos(x)`, `tan(x)`, `abs(x)`, `sqrt(x)`, `exp(x)`, `log(x)`, `tanh(x)`
 - `pow(a, b)`, `min(a, b)`, `max(a, b)`

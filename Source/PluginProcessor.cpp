@@ -1,13 +1,6 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 
-namespace
-{
-juce::String macroParamId (int index)
-{
-    return "macro" + juce::String (index + 1);
-}
-} // namespace
 
 AudioScripterAudioProcessor::AudioScripterAudioProcessor()
     : AudioProcessor (BusesProperties()

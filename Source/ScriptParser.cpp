@@ -1,3 +1,61 @@
+#include <optional>
+// --- AST Node Implementations for New Language ---
+
+// BlockStatement
+void BlockStatement::execute(EvalContext& ctx) const {
+    for (const auto& stmt : statements) {
+        stmt->execute(ctx);
+    }
+}
+
+// IfStatement
+void IfStatement::execute(EvalContext& ctx) const {
+    if (condition->evaluate(ctx)) {
+        if (thenBranch) thenBranch->execute(ctx);
+    } else if (elseBranch) {
+        elseBranch->execute(ctx);
+    }
+}
+
+// WhileStatement
+void WhileStatement::execute(EvalContext& ctx) const {
+    ctx.loopDepth++;
+    if (ctx.loopDepth > ctx.maxLoopDepth) { ctx.executionAborted = true; ctx.loopDepth--; return; }
+    while (condition->evaluate(ctx) && !ctx.executionAborted) {
+        if (body) body->execute(ctx);
+    }
+    ctx.loopDepth--;
+}
+
+// ForStatement
+void ForStatement::execute(EvalContext& ctx) const {
+    ctx.loopDepth++;
+    if (ctx.loopDepth > ctx.maxLoopDepth) { ctx.executionAborted = true; ctx.loopDepth--; return; }
+    float start = startExpr->evaluate(ctx);
+    float end = endExpr->evaluate(ctx);
+    for (float i = start; i < end && !ctx.executionAborted; ++i) {
+        ctx.locals[varName] = i;
+        if (body) body->execute(ctx);
+    }
+    ctx.loopDepth--;
+}
+
+// FunctionDefStatement (no-op for now, registry needed)
+void FunctionDefStatement::execute(EvalContext&) const {}
+
+// ReturnStatement (no-op for now, needs call stack)
+void ReturnStatement::execute(EvalContext&) const {}
+
+// AssignmentStatement
+void AssignmentStatement::execute(EvalContext& ctx) const {
+    float val = expression->evaluate(ctx);
+    ctx.setValue(variableName, val);
+}
+
+// ExpressionStatement
+void ExpressionStatement::execute(EvalContext& ctx) const {
+    if (expression) expression->evaluate(ctx);
+}
 #include "ScriptParser.h"
 #include <cmath>
 
@@ -5,6 +63,9 @@ namespace scripting
 {
 namespace
 {
+constexpr int kMaxStatements = 256;
+constexpr int kFoldGuard     = 64;
+
 struct NumberExpr final : Expr
 {
     explicit NumberExpr (float v) : value (v) {}
@@ -12,10 +73,10 @@ struct NumberExpr final : Expr
     float value;
 };
 
-struct VariableExpr final : Expr
-{
-    explicit VariableExpr (juce::String n) : name (std::move (n)) {}
-    float evaluate (EvalContext& ctx) const override { return ctx.getValue (name); }
+struct VariableExpr final : Expr {
+    explicit VariableExpr(juce::String n) : name(std::move(n)) {}
+    float evaluate(EvalContext& ctx) const override { return ctx.getValue(name); }
+    ValueType getType() const override { return ValueType::Float; } // Could be improved with symbol table
     juce::String name;
 };
 
@@ -53,155 +114,110 @@ struct UnaryExpr final : Expr
     std::unique_ptr<Expr> expr;
 };
 
-struct FunctionCallExpr final : Expr
+enum class FunctionId
 {
-    explicit FunctionCallExpr (juce::String fn) : functionName (std::move (fn)) {}
-
-    float evaluate (EvalContext& ctx) const override
-    {
-        std::vector<float> values;
-        values.reserve (arguments.size());
-        for (const auto& arg : arguments)
-            values.push_back (arg->evaluate (ctx));
-
-        const auto fn = functionName.toLowerCase();
-
-        if (fn == "sin") return std::sin (values[0]);
-        if (fn == "cos") return std::cos (values[0]);
-        if (fn == "tan") return std::tan (values[0]);
-        if (fn == "abs") return std::abs (values[0]);
-        if (fn == "sqrt") return std::sqrt (std::max (0.0f, values[0]));
-        if (fn == "exp") return std::exp (values[0]);
-        if (fn == "log") return std::log (std::max (1.0e-9f, values[0]));
-        if (fn == "pow") return std::pow (values[0], values[1]);
-        if (fn == "min") return std::min (values[0], values[1]);
-        if (fn == "max") return std::max (values[0], values[1]);
-        if (fn == "clamp") return juce::jlimit (values[1], values[2], values[0]);
-        if (fn == "mix") return values[0] * (1.0f - values[2]) + values[1] * values[2];
-        if (fn == "wrap")
-        {
-            const auto lo = values[1];
-            const auto hi = values[2];
-            const auto width = hi - lo;
-            if (std::abs (width) < 1.0e-9f) return lo;
-            auto x = std::fmod (values[0] - lo, width);
-            if (x < 0.0f) x += width;
-            return lo + x;
-        }
-
-        if (fn == "lpf1")
-        {
-            const auto x = values[0];
-            const auto coeff = juce::jlimit (0.0f, 1.0f, values[1]);
-            const int id = (int) (values.size() > 2 ? values[2] : 0.0f);
-            const auto key = "state_lpf1_" + juce::String (id);
-            const auto y = coeff * x + (1.0f - coeff) * ctx.getValue (key);
-            ctx.setValue (key, y);
-            return y;
-        }
-
-        if (fn == "slew")
-        {
-            const auto target = values[0];
-            const auto speed = std::max (0.0f, values[1]);
-            const int id = (int) (values.size() > 2 ? values[2] : 0.0f);
-            const auto key = "state_slew_" + juce::String (id);
-            const auto current = ctx.getValue (key);
-            const auto step = juce::jlimit (-speed, speed, target - current);
-            const auto y = current + step;
-            ctx.setValue (key, y);
-            return y;
-        }
-
-        if (fn == "env")
-        {
-            const auto x = std::abs (values[0]);
-            const auto attack = juce::jlimit (0.0f, 1.0f, values[1]);
-            const auto release = juce::jlimit (0.0f, 1.0f, values[2]);
-            const int id = (int) (values.size() > 3 ? values[3] : 0.0f);
-            const auto key = "state_env_" + juce::String (id);
-            const auto current = ctx.getValue (key);
-            const auto coeff = x > current ? attack : release;
-            const auto y = coeff * x + (1.0f - coeff) * current;
-            ctx.setValue (key, y);
-            return y;
-        }
-        if (fn == "clip") return juce::jlimit (values[1], values[2], values[0]);
-        if (fn == "fold")
-        {
-            const auto lo = values[1];
-            const auto hi = values[2];
-            auto x = values[0];
-            if (hi <= lo || ! std::isfinite (x)) return lo;
-
-            int guard = 64;
-            while ((x < lo || x > hi) && --guard > 0)
-            {
-                if (x > hi) x = hi - (x - hi);
-                if (x < lo) x = lo + (lo - x);
-            }
-
-            return juce::jlimit (lo, hi, x);
-        }
-        if (fn == "crush")
-        {
-            const auto steps = std::max (1.0f, values[1]);
-            return std::round (values[0] * steps) / steps;
-        }
-
-        if (fn == "gt") return values[0] > values[1] ? 1.0f : 0.0f;
-        if (fn == "lt") return values[0] < values[1] ? 1.0f : 0.0f;
-        if (fn == "ge") return values[0] >= values[1] ? 1.0f : 0.0f;
-        if (fn == "le") return values[0] <= values[1] ? 1.0f : 0.0f;
-        if (fn == "select") return values[0] >= 0.5f ? values[1] : values[2];
-
-        if (fn == "pulse")
-        {
-            const auto freq = std::max (0.0f, values[0]);
-            const auto duty = juce::jlimit (0.0f, 1.0f, values[1]);
-            const auto phase = std::fmod (ctx.t * freq, 1.0f);
-            return phase < duty ? 1.0f : -1.0f;
-        }
-        if (fn == "smoothstep")
-        {
-            const auto edge0 = values[0];
-            const auto edge1 = values[1];
-            if (edge1 <= edge0) return 0.0f;
-            auto x = (values[2] - edge0) / (edge1 - edge0);
-            x = juce::jlimit (0.0f, 1.0f, x);
-            return x * x * (3.0f - 2.0f * x);
-        }
-
-        if (fn == "noise")
-        {
-            const auto seed = values[0];
-            const auto x = std::sin ((ctx.t + seed) * 43758.5453f) * 12345.6789f;
-            return (std::fmod (x, 2.0f) - 1.0f);
-        }
-
-        if (fn == "tanh") return std::tanh (values[0]);
-        return 0.0f;
-    }
-
-    juce::String functionName;
-    std::vector<std::unique_ptr<Expr>> arguments;
+    sin_, cos_, tan_, abs_, sqrt_, exp_, log_, tanh_,
+    pow_, min_, max_,
+    clamp_, clip_, mix_, wrap_,
+    fold_, crush_, smoothstep_, noise_,
+    gt_, lt_, ge_, le_, select_, pulse_,
+    lpf1_, slew_, env_,
+    unknown
 };
+
+FunctionId resolveFunctionId (const juce::String& lowercaseName)
+{
+    if (lowercaseName == "sin")        return FunctionId::sin_;
+    if (lowercaseName == "cos")        return FunctionId::cos_;
+    if (lowercaseName == "tan")        return FunctionId::tan_;
+    if (lowercaseName == "abs")        return FunctionId::abs_;
+    if (lowercaseName == "sqrt")       return FunctionId::sqrt_;
+    if (lowercaseName == "exp")        return FunctionId::exp_;
+    if (lowercaseName == "log")        return FunctionId::log_;
+    if (lowercaseName == "tanh")       return FunctionId::tanh_;
+    if (lowercaseName == "pow")        return FunctionId::pow_;
+    if (lowercaseName == "min")        return FunctionId::min_;
+    if (lowercaseName == "max")        return FunctionId::max_;
+    if (lowercaseName == "clamp")      return FunctionId::clamp_;
+    if (lowercaseName == "clip")       return FunctionId::clip_;
+    if (lowercaseName == "mix")        return FunctionId::mix_;
+    if (lowercaseName == "wrap")       return FunctionId::wrap_;
+    if (lowercaseName == "fold")       return FunctionId::fold_;
+    if (lowercaseName == "crush")      return FunctionId::crush_;
+    if (lowercaseName == "smoothstep") return FunctionId::smoothstep_;
+    if (lowercaseName == "noise")      return FunctionId::noise_;
+    if (lowercaseName == "gt")         return FunctionId::gt_;
+    if (lowercaseName == "lt")         return FunctionId::lt_;
+    if (lowercaseName == "ge")         return FunctionId::ge_;
+    if (lowercaseName == "le")         return FunctionId::le_;
+    if (lowercaseName == "select")     return FunctionId::select_;
+    if (lowercaseName == "pulse")      return FunctionId::pulse_;
+    if (lowercaseName == "lpf1")       return FunctionId::lpf1_;
+    if (lowercaseName == "slew")       return FunctionId::slew_;
+    if (lowercaseName == "env")        return FunctionId::env_;
+    return FunctionId::unknown;
+}
+
+
+// --- FunctionCallExpr Implementation ---
+float FunctionCallExpr::evaluate(EvalContext& ctx) const {
+    std::vector<float> values;
+    values.reserve(arguments.size());
+    for (const auto& arg : arguments)
+        values.push_back(arg->evaluate(ctx));
+
+    // Extensible function registry lookup
+    if (ctx.functionRegistry) {
+        // Built-in
+        auto it = ctx.functionRegistry->builtins.find(functionName);
+        if (it != ctx.functionRegistry->builtins.end())
+            return it->second(ctx, values);
+        // User-defined
+        auto uit = ctx.functionRegistry->user.find(functionName);
+        if (uit != ctx.functionRegistry->user.end()) {
+            // TODO: User-defined function call logic (already implemented)
+            // For now, just return 0
+            return 0.0f;
+        }
+    }
+    return 0.0f;
+}
+
+// To add a new DSP function:
+// 1. Implement a BuiltinFunction lambda or function.
+// 2. Register it in ScriptEngine::compileAndInstall via functionRegistry.builtins["name"] = ...;
+// 3. Document its usage in LANGUAGE_SPEC.md.
 
 bool checkArity (const juce::String& fn, int arity)
 {
-    const auto name = fn.toLowerCase();
-    static const std::map<juce::String, int> map {
-        { "sin", 1 }, { "cos", 1 }, { "tan", 1 }, { "abs", 1 }, { "sqrt", 1 },
-        { "exp", 1 }, { "log", 1 }, { "pow", 2 }, { "min", 2 }, { "max", 2 },
-        { "clamp", 3 }, { "mix", 3 }, { "wrap", 3 }, { "tanh", 1 }, { "clip", 3 }, { "fold", 3 }, { "crush", 2 }, { "smoothstep", 3 }, { "noise", 1 }, { "gt", 2 }, { "lt", 2 }, { "ge", 2 }, { "le", 2 }, { "select", 3 }, { "pulse", 2 }, { "env", 3 }
-    };
+    switch (resolveFunctionId (fn.toLowerCase()))
+    {
+        case FunctionId::sin_: case FunctionId::cos_: case FunctionId::tan_:
+        case FunctionId::abs_: case FunctionId::sqrt_: case FunctionId::exp_:
+        case FunctionId::log_: case FunctionId::tanh_: case FunctionId::noise_:
+            return arity == 1;
 
-    if (name == "lpf1" || name == "slew")
-        return arity == 2 || arity == 3;
-        if (name == "env")
-        return arity == 3 || arity == 4;
-    const auto it = map.find (name);
-    return it != map.end() && it->second == arity;
+        case FunctionId::pow_: case FunctionId::min_: case FunctionId::max_:
+        case FunctionId::crush_: case FunctionId::gt_: case FunctionId::lt_:
+        case FunctionId::ge_: case FunctionId::le_: case FunctionId::pulse_:
+            return arity == 2;
+
+        case FunctionId::clamp_: case FunctionId::clip_: case FunctionId::mix_:
+        case FunctionId::wrap_: case FunctionId::fold_: case FunctionId::smoothstep_:
+        case FunctionId::select_:
+            return arity == 3;
+
+        // Optional trailing id argument.
+        case FunctionId::lpf1_: case FunctionId::slew_:
+            return arity == 2 || arity == 3;
+
+        case FunctionId::env_:
+            return arity == 3 || arity == 4;
+
+        case FunctionId::unknown:
+        default:
+            return false;
+    }
 }
 } // namespace
 
@@ -251,44 +267,171 @@ void EvalContext::setValue (const juce::String& name, float value)
     locals[name] = value;
 }
 
-ParseResult ScriptParser::parse (const juce::String& source)
-{
+ParseResult ScriptParser::parse(const juce::String& source) {
     ParseResult result;
-    tokenizer = std::make_unique<ScriptTokenizer> (source);
+    tokenizer = std::make_unique<ScriptTokenizer>(source);
     errors = &result.errors;
 
-    while (peek().type != TokenType::end)
-    {
-        auto id = consume();
-        if (id.type != TokenType::identifier)
-        {
-            errors->add ("Line " + juce::String (id.line) + ": expected identifier at statement start.");
-            break;
-        }
-
-        if (! expect (TokenType::equal, "expected '=' after identifier."))
-            break;
-
-        auto expr = parseExpression();
-        if (! expr)
-            break;
-
-        if (! expect (TokenType::semicolon, "expected ';' at end of statement."))
-            break;
-
-        result.program.statements.push_back ({ id.text, std::move (expr), id.line });
-
-        if (result.program.statements.size() > 256)
-        {
-            errors->add ("Program too large: maximum 256 statements.");
+    while (peek().type != TokenType::end) {
+        auto stmt = parseStatement();
+        if (!stmt) break;
+        result.program.statements.push_back(std::move(stmt));
+        if ((int)result.program.statements.size() > kMaxStatements) {
+            errors->add("Program too large: maximum " + juce::String(kMaxStatements) + " statements.");
             break;
         }
     }
-
     if (result.program.statements.empty())
-        errors->add ("Script is empty. Add at least one statement ending with ';'.");
-
+        errors->add("Script is empty. Add at least one statement.");
     return result;
+}
+
+// --- New Statement Parsing ---
+
+std::unique_ptr<Statement> ScriptParser::parseStatement() {
+    const auto token = peek();
+    switch (token.type) {
+        case TokenType::kw_if:    return parseIf();
+        case TokenType::kw_while: return parseWhile();
+        case TokenType::kw_for:   return parseFor();
+        case TokenType::kw_fn:    return parseFunctionDef();
+        case TokenType::kw_return:return parseReturn();
+        case TokenType::leftBrace:return parseBlock();
+        case TokenType::identifier:
+            return parseAssignmentOrExpr();
+        default:
+            errors->add("Line " + juce::String(token.line) + ": unexpected token at statement start: '" + token.text + "'.");
+            consume();
+            return nullptr;
+    }
+}
+
+std::unique_ptr<BlockStatement> ScriptParser::parseBlock() {
+    if (!expect(TokenType::leftBrace, "expected '{' to start block")) return nullptr;
+    auto block = std::make_unique<BlockStatement>();
+    while (peek().type != TokenType::rightBrace && peek().type != TokenType::end) {
+        auto stmt = parseStatement();
+        if (!stmt) return nullptr;
+        block->statements.push_back(std::move(stmt));
+    }
+    if (!expect(TokenType::rightBrace, "expected '}' to end block")) return nullptr;
+    return block;
+}
+
+std::unique_ptr<Statement> ScriptParser::parseIf() {
+    consume(); // 'if'
+    if (!expect(TokenType::leftParen, "expected '(' after 'if'")) return nullptr;
+    auto cond = parseExpression();
+    if (!cond) return nullptr;
+    if (!expect(TokenType::rightParen, "expected ')' after condition")) return nullptr;
+    auto thenBranch = parseStatement();
+    std::unique_ptr<Statement> elseBranch;
+    if (peek().type == TokenType::kw_else) {
+        consume();
+        elseBranch = parseStatement();
+    }
+    auto node = std::make_unique<IfStatement>();
+    node->condition = std::move(cond);
+    node->thenBranch = std::move(thenBranch);
+    node->elseBranch = std::move(elseBranch);
+    return node;
+}
+
+std::unique_ptr<Statement> ScriptParser::parseWhile() {
+    consume(); // 'while'
+    if (!expect(TokenType::leftParen, "expected '(' after 'while'")) return nullptr;
+    auto cond = parseExpression();
+    if (!cond) return nullptr;
+    if (!expect(TokenType::rightParen, "expected ')' after condition")) return nullptr;
+    auto body = parseStatement();
+    auto node = std::make_unique<WhileStatement>();
+    node->condition = std::move(cond);
+    node->body = std::move(body);
+    return node;
+}
+
+std::unique_ptr<Statement> ScriptParser::parseFor() {
+    consume(); // 'for'
+    if (!expect(TokenType::leftParen, "expected '(' after 'for'")) return nullptr;
+    auto id = consume();
+    if (id.type != TokenType::identifier) {
+        errors->add("Line " + juce::String(id.line) + ": expected identifier in for loop.");
+        return nullptr;
+    }
+    if (!expect(TokenType::equal, "expected '=' after for variable")) return nullptr;
+    auto start = parseExpression();
+    if (!start) return nullptr;
+    if (!expect(TokenType::semicolon, "expected ';' after for start expr")) return nullptr;
+    auto end = parseExpression();
+    if (!end) return nullptr;
+    if (!expect(TokenType::rightParen, "expected ')' after for end expr")) return nullptr;
+    auto body = parseStatement();
+    auto node = std::make_unique<ForStatement>();
+    node->varName = id.text;
+    node->startExpr = std::move(start);
+    node->endExpr = std::move(end);
+    node->body = std::move(body);
+    return node;
+}
+
+std::unique_ptr<Statement> ScriptParser::parseFunctionDef() {
+    consume(); // 'fn'
+    auto id = consume();
+    if (id.type != TokenType::identifier) {
+        errors->add("Line " + juce::String(id.line) + ": expected function name after 'fn'.");
+        return nullptr;
+    }
+    if (!expect(TokenType::leftParen, "expected '(' after function name")) return nullptr;
+    std::vector<juce::String> params;
+    if (peek().type != TokenType::rightParen) {
+        while (true) {
+            auto param = consume();
+            if (param.type != TokenType::identifier) {
+                errors->add("Line " + juce::String(param.line) + ": expected parameter name.");
+                return nullptr;
+            }
+            params.push_back(param.text);
+            if (peek().type == TokenType::comma) { consume(); continue; }
+            break;
+        }
+    }
+    if (!expect(TokenType::rightParen, "expected ')' after parameter list")) return nullptr;
+    auto body = parseBlock();
+    auto node = std::make_unique<FunctionDefStatement>();
+    node->name = id.text;
+    node->parameters = std::move(params);
+    node->body = std::move(body);
+    return node;
+}
+
+std::unique_ptr<Statement> ScriptParser::parseReturn() {
+    consume(); // 'return'
+    auto expr = parseExpression();
+    if (!expect(TokenType::semicolon, "expected ';' after return value")) return nullptr;
+    auto node = std::make_unique<ReturnStatement>();
+    node->value = std::move(expr);
+    return node;
+}
+
+std::unique_ptr<Statement> ScriptParser::parseAssignmentOrExpr() {
+    // Lookahead for assignment
+    auto id = consume();
+    if (peek().type == TokenType::equal) {
+        consume();
+        auto expr = parseExpression();
+        if (!expect(TokenType::semicolon, "expected ';' after assignment")) return nullptr;
+        auto node = std::make_unique<AssignmentStatement>();
+        node->variableName = id.text;
+        node->expression = std::move(expr);
+        return node;
+    } else {
+        // Expression statement
+        auto expr = parseExpression();
+        if (!expect(TokenType::semicolon, "expected ';' after expression")) return nullptr;
+        auto node = std::make_unique<ExpressionStatement>();
+        node->expression = std::move(expr);
+        return node;
+    }
 }
 
 std::unique_ptr<Expr> ScriptParser::parseExpression() { return parseAddSub(); }
@@ -359,49 +502,53 @@ std::unique_ptr<Expr> ScriptParser::parsePrimary()
 {
     const auto token = consume();
 
-    if (token.type == TokenType::number)
-        return std::make_unique<NumberExpr> ((float) token.numberValue);
+
+    if (token.type == TokenType::number) {
+        // Distinguish int vs float
+        if (token.text.containsChar('.'))
+            return std::make_unique<TypedLiteralExpr>((float)token.numberValue, ValueType::Float);
+        else
+            return std::make_unique<TypedLiteralExpr>((float)token.numberValue, ValueType::Int);
+    }
+
+    if (token.type == TokenType::kw_true)
+        return std::make_unique<BoolLiteralExpr>(true);
+    if (token.type == TokenType::kw_false)
+        return std::make_unique<BoolLiteralExpr>(false);
 
     if (token.type == TokenType::identifier)
     {
-        if (peek().type != TokenType::leftParen)
-            return std::make_unique<VariableExpr> (token.text);
-
-        consume(); // '('
-        auto call = std::make_unique<FunctionCallExpr> (token.text);
-
-        if (peek().type != TokenType::rightParen)
+        if (token.type == TokenType::identifier)
         {
-            while (true)
+            if (peek().type != TokenType::leftParen)
+                return std::make_unique<VariableExpr>(token.text);
+
+            consume(); // '('
+            std::vector<std::unique_ptr<Expr>> args;
+            if (peek().type != TokenType::rightParen)
             {
-                auto arg = parseExpression();
-                if (! arg)
-                    return {};
-
-                call->arguments.push_back (std::move (arg));
-
-                if (peek().type == TokenType::comma)
+                while (true)
                 {
-                    consume();
-                    continue;
+                    auto arg = parseExpression();
+                    if (!arg)
+                        return {};
+                    args.push_back(std::move(arg));
+                    if (peek().type == TokenType::comma)
+                    {
+                        consume();
+                        continue;
+                    }
+                    break;
                 }
-
-                break;
             }
+            if (!expect(TokenType::rightParen, "expected ')' after function arguments."))
+                return {};
+            // No arity check here: user-defined functions may have any arity
+            auto call = std::make_unique<FunctionCallExpr>();
+            call->functionName = token.text;
+            call->arguments = std::move(args);
+            return call;
         }
-
-        if (! expect (TokenType::rightParen, "expected ')' after function arguments."))
-            return {};
-
-        if (! checkArity (token.text, (int) call->arguments.size()))
-        {
-            errors->add ("Line " + juce::String (token.line) + ": invalid function or argument count for '" + token.text + "'.");
-            return {};
-        }
-
-        return call;
-    }
-
     if (token.type == TokenType::leftParen)
     {
         auto expr = parseExpression();
@@ -424,7 +571,7 @@ bool ScriptParser::expect (TokenType type, const juce::String& message)
     if (token.type == type)
         return true;
 
-    errors->add ("Line " + juce::String (token.line) + ": " + message);
+    errors->add ("Line " + juce::String (token.line) + ": " + message + " (got '" + token.text + "')");
     return false;
 }
 

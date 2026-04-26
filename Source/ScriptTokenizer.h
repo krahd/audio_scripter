@@ -6,10 +6,14 @@ namespace scripting
 {
 enum class TokenType
 {
+    // Literals and identifiers
     identifier,
     number,
+    // Symbols
     leftParen,
     rightParen,
+    leftBrace,
+    rightBrace,
     comma,
     equal,
     semicolon,
@@ -17,6 +21,16 @@ enum class TokenType
     minus,
     star,
     slash,
+    // Keywords
+    kw_if,
+    kw_else,
+    kw_while,
+    kw_for,
+    kw_fn,
+    kw_return,
+    kw_true,
+    kw_false,
+    // End of input
     end,
     invalid
 };
@@ -38,8 +52,9 @@ public:
     Token peek();
 
 private:
+    Token makeKeywordOrIdentifier();
+
     void skipWhitespace();
-    Token makeIdentifier();
     Token makeNumber();
 
     juce::String source;

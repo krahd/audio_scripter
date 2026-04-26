@@ -34,7 +34,7 @@ Token ScriptTokenizer::next()
     const auto c = source[position];
 
     if (juce::CharacterFunctions::isLetter (c) || c == '_')
-        return makeIdentifier();
+        return makeKeywordOrIdentifier();
 
     if (juce::CharacterFunctions::isDigit (c) || c == '.')
         return makeNumber();
@@ -45,6 +45,8 @@ Token ScriptTokenizer::next()
     {
         case '(' : return { TokenType::leftParen, "(", 0.0, line };
         case ')' : return { TokenType::rightParen, ")", 0.0, line };
+        case '{' : return { TokenType::leftBrace, "{", 0.0, line };
+        case '}' : return { TokenType::rightBrace, "}", 0.0, line };
         case ',' : return { TokenType::comma, ",", 0.0, line };
         case '=' : return { TokenType::equal, "=", 0.0, line };
         case ';' : return { TokenType::semicolon, ";", 0.0, line };
@@ -88,19 +90,28 @@ void ScriptTokenizer::skipWhitespace()
     }
 }
 
-Token ScriptTokenizer::makeIdentifier()
+
+Token ScriptTokenizer::makeKeywordOrIdentifier()
 {
     const int start = position;
-
     while (position < source.length())
     {
         const auto c = source[position];
-        if (! juce::CharacterFunctions::isLetterOrDigit (c) && c != '_')
+        if (!juce::CharacterFunctions::isLetterOrDigit(c) && c != '_')
             break;
         ++position;
     }
-
-    return { TokenType::identifier, source.substring (start, position), 0.0, line };
+    const auto text = source.substring(start, position);
+    // Keywords
+    if (text == "if")    return { TokenType::kw_if, text, 0.0, line };
+    if (text == "else")  return { TokenType::kw_else, text, 0.0, line };
+    if (text == "while") return { TokenType::kw_while, text, 0.0, line };
+    if (text == "for")   return { TokenType::kw_for, text, 0.0, line };
+    if (text == "fn")    return { TokenType::kw_fn, text, 0.0, line };
+    if (text == "return") return { TokenType::kw_return, text, 0.0, line };
+    if (text == "true")  return { TokenType::kw_true, text, 1.0, line };
+    if (text == "false") return { TokenType::kw_false, text, 0.0, line };
+    return { TokenType::identifier, text, 0.0, line };
 }
 
 Token ScriptTokenizer::makeNumber()

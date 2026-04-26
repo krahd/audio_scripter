@@ -1,6 +1,7 @@
 #pragma once
 
 #include <JuceHeader.h>
+#include "Constants.h"
 #include "ScriptParser.h"
 #include <atomic>
 
@@ -27,15 +28,18 @@ public:
     void processBlock (juce::AudioBuffer<float>& buffer, const std::array<float, 8>& macros);
 
     juce::String getCurrentSource() const;
+    juce::String getLastError() const;
 
 private:
     std::shared_ptr<const CompiledProgram> getProgramSnapshot() const;
+    void enforcePersistentStateLimit();
 
-    std::shared_ptr<const CompiledProgram> activeProgram;
+    std::atomic<std::shared_ptr<const CompiledProgram>> activeProgram;
     std::map<juce::String, float> persistentState;
     std::atomic<bool> stateResetRequested { false };
     double currentSampleRate { 44100.0 };
     uint64_t sampleCounter { 0 };
+    juce::String lastError;
 };
 
 juce::String defaultScript();

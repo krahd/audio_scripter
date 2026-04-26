@@ -7,14 +7,31 @@ ScriptEngine::CompileResult ScriptEngine::compileAndInstall (const juce::String&
     ScriptParser parser;
     auto result = parser.parse (source);
 
-    if (! result.errors.isEmpty())
+    // Build extensible function registry
+    result.program.functionRegistry.builtins.clear();
+    result.program.functionRegistry.user.clear();
+    // Register built-in functions (example: sin)
+    result.program.functionRegistry.builtins["sin"] = [](EvalContext&, const std::vector<float>& args) { return std::sin(args[0]); };
+    // ...register other built-ins here...
+    for (const auto& stmt : result.program.statements) {
+        if (auto* fn = dynamic_cast<FunctionDefStatement*>(stmt.get())) {
+            result.program.functionRegistry.user[fn->name] = fn;
+        }
+    }
+
+    if (! result.errors.isEmpty()) {
+        lastError = result.errors.joinIntoString("\n");
         return { false, result.errors };
+    }
+juce::String ScriptEngine::getLastError() const {
+    return lastError;
+}
 
     auto compiled = std::make_shared<CompiledProgram>();
     compiled->program = std::move (result.program);
     compiled->source = source;
 
-    std::atomic_store (&activeProgram, std::shared_ptr<const CompiledProgram> (compiled));
+    activeProgram.store (std::shared_ptr<const CompiledProgram> (compiled));
     stateResetRequested.store (true);
     return { true, {} };
 }
@@ -37,7 +54,17 @@ juce::String ScriptEngine::getCurrentSource() const
 
 std::shared_ptr<const CompiledProgram> ScriptEngine::getProgramSnapshot() const
 {
-    return std::atomic_load (&activeProgram);
+    return activeProgram.load();
+}
+
+constexpr size_t kMaxPersistentStateEntries = 128;
+
+void ScriptEngine::enforcePersistentStateLimit()
+{
+    while (persistentState.size() > kMaxPersistentStateEntries) {
+        // Remove oldest entry
+        persistentState.erase(persistentState.begin());
+    }
 }
 
 void ScriptEngine::processBlock (juce::AudioBuffer<float>& buffer, const std::array<float, 8>& macros)
@@ -51,30 +78,43 @@ void ScriptEngine::processBlock (juce::AudioBuffer<float>& buffer, const std::ar
     const int numChannels = buffer.getNumChannels();
     const int numSamples = buffer.getNumSamples();
 
+    // Macro parameter validation: clamp to [0, 1] and ensure finite
+    std::array<float, 8> safeMacros;
+    for (size_t i = 0; i < 8; ++i) {
+        float v = macros[i];
+        if (!std::isfinite(v)) v = 0.0f;
+        if (v < 0.0f) v = 0.0f;
+        if (v > 1.0f) v = 1.0f;
+        safeMacros[i] = v;
+    }
+
     if (program == nullptr)
     {
         sampleCounter += (uint64_t) numSamples;
         return;
     }
 
+    EvalContext ctx;
+    ctx.sr = (float) currentSampleRate;
+    ctx.macros = &safeMacros;
+    ctx.persistentState = &persistentState;
+    if (program) ctx.functionRegistry = &program->program.functionRegistry;
+
     for (int s = 0; s < numSamples; ++s)
     {
-        EvalContext ctx;
-        ctx.sr = (float) currentSampleRate;
-        ctx.t = (float) sampleCounter / (float) currentSampleRate;
-        ctx.macros = &macros;
-        ctx.persistentState = &persistentState;
-
-        ctx.inL = numChannels > 0 ? buffer.getSample (0, s) : 0.0f;
-        ctx.inR = numChannels > 1 ? buffer.getSample (1, s) : ctx.inL;
+        ctx.t    = (float) sampleCounter / (float) currentSampleRate;
+        ctx.inL  = numChannels > 0 ? buffer.getSample (0, s) : 0.0f;
+        ctx.inR  = numChannels > 1 ? buffer.getSample (1, s) : ctx.inL;
         ctx.outL = 0.0f;
         ctx.outR = 0.0f;
+        ctx.locals.clear();
 
         for (const auto& stmt : program->program.statements)
         {
-            const float val = stmt.expression->evaluate (ctx);
-            ctx.setValue (stmt.variableName, val);
+            if (stmt) stmt->execute(ctx);
         }
+
+        enforcePersistentStateLimit();
 
         if (numChannels > 0)
             buffer.setSample (0, s, ctx.outL);
