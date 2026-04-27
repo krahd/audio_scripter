@@ -1,0 +1,16 @@
+# FM synthesis via sample-accurate phase accumulators stored in state_ vars
+# p1 = carrier Hz, p2 = mod ratio (rel. to carrier), p3 = mod index, p4 = dry/wet
+fn sine(ph) {
+    return sin(6.2831853 * ph);
+}
+
+dt = 1.0 / sr;
+carrier_hz = 50.0 + p1 * 950.0;
+mod_hz = carrier_hz * (0.5 + p2 * 7.5);
+mod_idx = p3 * 8.0;
+state_phC = wrap(state_phC + carrier_hz * dt, 0.0, 1.0);
+state_phM = wrap(state_phM + mod_hz * dt, 0.0, 1.0);
+modSig = sine(state_phM) * mod_idx;
+carrier = sine(state_phC + modSig);
+outL = mix(inL, carrier * 0.7, p4);
+outR = outL;

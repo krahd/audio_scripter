@@ -1,0 +1,18 @@
+# Noise gate with hysteresis: separate open/close thresholds prevent chattering
+# p1 = open threshold, p2 = hysteresis depth, p3 = gate speed
+open_thr = 0.02 + p1 * 0.48;
+close_thr = open_thr * (1.0 - p2 * 0.85);
+amp = env(abs(inL), 0.001, 0.1, 0);
+if (gt(state_open, 0.5)) {
+    if (lt(amp, close_thr)) {
+        state_open = 0.0;
+    }
+} else {
+    if (ge(amp, open_thr)) {
+        state_open = 1.0;
+    }
+}
+target = select(gt(state_open, 0.5), 1.0, 0.0);
+gain = slew(target, 0.005 + p3 * 0.05, 0);
+outL = inL * gain;
+outR = inR * gain;

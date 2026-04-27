@@ -81,7 +81,12 @@ if [ -n "$GENERATOR" ]; then
 fi
 
 echo "Configuring..."
-cmake -S "$WORKSPACE_ROOT" -B "$WORKSPACE_ROOT/$BUILD_DIR" "${cmake_args[@]}"
+# If cmake_args is non-empty (safe when script is run with set -u), pass them; otherwise call cmake without extras.
+if [ "${#cmake_args[@]:-0}" -gt 0 ]; then
+  cmake -S "$WORKSPACE_ROOT" -B "$WORKSPACE_ROOT/$BUILD_DIR" "${cmake_args[@]}"
+else
+  cmake -S "$WORKSPACE_ROOT" -B "$WORKSPACE_ROOT/$BUILD_DIR"
+fi
 
 echo "Building targets: ${TARGETS[*]}"
 for t in "${TARGETS[@]}"; do

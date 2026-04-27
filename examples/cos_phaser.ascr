@@ -1,0 +1,12 @@
+# Cosine-swept resonant comb: cos LFO drives filter coefficient for phaser-like sweeps
+# p1 = sweep speed, p2 = sweep depth, p3 = resonance feedback, p4 = dry/wet
+dt = 1.0 / sr;
+state_lfoPhase = wrap(state_lfoPhase + (0.1 + p1 * 4.9) * dt, 0.0, 1.0);
+sweep = 0.5 + 0.5 * cos(6.2831853 * state_lfoPhase);
+coeff = 0.003 + sweep * p2 * 0.18;
+resL = lpf1(inL + state_resL * p3 * 0.9, coeff, 0);
+resR = lpf1(inR + state_resR * p3 * 0.9, coeff, 1);
+state_resL = resL;
+state_resR = resR;
+outL = mix(inL, resL, p4);
+outR = mix(inR, resR, p4);

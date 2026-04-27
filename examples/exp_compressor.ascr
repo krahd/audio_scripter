@@ -1,0 +1,19 @@
+# Soft-knee compressor: exponential gain reduction with smoothstep knee shaping
+# p1 = threshold, p2 = ratio, p3 = attack, p4 = release
+fn gainReduction(amp, thr, ratio) {
+    excess = amp - thr;
+    knee = smoothstep(0.0, thr * 0.3, excess);
+    red = excess * (1.0 - 1.0 / (1.0 + ratio * 8.0)) * knee;
+    return exp(-red * 3.0);
+}
+
+thr = 0.05 + p1 * 0.75;
+ratio = p2;
+atk = 0.0005 + p3 * 0.02;
+rel = 0.02 + p4 * 0.3;
+eL = env(inL, atk, rel, 0);
+eR = env(inR, atk, rel, 1);
+gainL = gainReduction(eL, thr, ratio);
+gainR = gainReduction(eR, thr, ratio);
+outL = inL * gainL;
+outR = inR * gainR;

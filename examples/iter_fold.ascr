@@ -1,0 +1,16 @@
+# Iterative wavefold: a while loop applies multiple fold passes for dense harmonics
+# p1 = pre-fold drive, p2 = fold iterations (1–8), p3 = dry/wet
+fn iterFold(x, drv, iters) {
+    y = x * drv;
+    n = 0.0;
+    while (lt(n, iters)) {
+        y = fold(y, -1.0, 1.0);
+        n = n + 1.0;
+    }
+    return y * 0.7;
+}
+
+drive = 1.0 + p1 * 7.0;
+iters = 1.0 + p2 * 7.0;
+outL = mix(inL, iterFold(inL, drive, iters), p3);
+outR = mix(inR, iterFold(inR, drive, iters), p3);

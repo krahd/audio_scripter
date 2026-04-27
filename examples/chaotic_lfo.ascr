@@ -1,0 +1,20 @@
+# Chaotic amplitude modulator: logistic map transitions from stable LFO to chaos
+# p1 = chaos amount (0=periodic, 1=fully chaotic), p2 = update rate, p3 = dry/wet
+fn logistic(x, r) {
+    return clamp(r * x * (1.0 - x), 0.001, 0.999);
+}
+
+if (le(state_init, 0.5)) {
+    state_x = 0.5;
+    state_init = true;
+}
+
+r = 2.5 + p1 * 1.5;
+rate = 0.5 + p2 * 19.5;
+if (gt(pulse(rate, 0.005), 0.0)) {
+    state_x = logistic(state_x, r);
+}
+
+gain = 0.4 + state_x * 0.6;
+outL = mix(inL, inL * gain, p3);
+outR = mix(inR, inR * gain, p3);

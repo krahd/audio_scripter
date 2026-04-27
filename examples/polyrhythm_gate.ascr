@@ -1,0 +1,13 @@
+# Polyrhythmic gating: three pulse rates (1 : 1.5 : 2) combine for complex rhythms
+# p1 = base tempo, p2 = noise floor level, p3 = gate slew smoothing
+base = 1.0 + p1 * 7.0;
+g1 = pulse(base, 0.5);
+g2 = pulse(base * 1.5, 0.35);
+g3 = pulse(base * 2.0, 0.25);
+gate = min(g1 + g2 * 0.7 + g3 * 0.5, 1.0);
+noise_floor = p2 * 0.05;
+target = max(gate, noise_floor);
+smoothGate = slew(target, 0.03 + p3 * 0.12, 0);
+n = noise(t * sr) * noise_floor;
+outL = inL * smoothGate + n;
+outR = inR * smoothGate + n * 0.8;

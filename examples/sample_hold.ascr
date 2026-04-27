@@ -1,0 +1,8 @@
+# Sample-and-hold: captures audio at each trigger, holds between triggers
+# p1 = trigger rate (0.5–16 Hz), p2 = dry/wet mix
+rate = 0.5 + p1 * 15.5;
+trig = pulse(rate, 0.005);
+state_hL = select(trig, inL, state_hL);
+state_hR = select(trig, inR, state_hR);
+outL = mix(inL, state_hL, p2);
+outR = mix(inR, state_hR, p2);

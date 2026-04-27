@@ -1,0 +1,11 @@
+# Sqrt compander: square-root transfer function gives warm, tube-like compression
+# p1 = input drive, p2 = sqrt blend (0=linear, 1=full sqrt), p3 = dry/wet
+fn sqrtShape(x, amount) {
+    a = abs(x);
+    s = select(gt(x, 0.0), 1.0, -1.0);
+    return s * mix(a, sqrt(a), amount);
+}
+
+drive = 1.0 + p1 * 4.0;
+outL = mix(inL, sqrtShape(clamp(inL * drive, -1.0, 1.0), p2), p3);
+outR = mix(inR, sqrtShape(clamp(inR * drive, -1.0, 1.0), p2), p3);

@@ -1,0 +1,17 @@
+# Autowah: envelope follower drives low-pass filter cutoff for wah-like sweep
+# p1 = envelope sensitivity, p2 = base cutoff, p3 = resonance feedback, p4 = release
+fn envToCoeff(amp) {
+    base = 0.003 + p2 * 0.04;
+    return clamp(base + amp * p1 * 0.5, 0.002, 0.48);
+}
+
+ampL = env(inL, 0.002, 0.05 + p4 * 0.4, 0);
+ampR = env(inR, 0.002, 0.05 + p4 * 0.4, 1);
+cfL = envToCoeff(ampL);
+cfR = envToCoeff(ampR);
+filtL = lpf1(inL + state_fbL * p3 * 0.4, cfL, 0);
+filtR = lpf1(inR + state_fbR * p3 * 0.4, cfR, 1);
+state_fbL = filtL;
+state_fbR = filtR;
+outL = mix(inL, filtL, 0.6 + p3 * 0.4);
+outR = mix(inR, filtR, 0.6 + p3 * 0.4);
