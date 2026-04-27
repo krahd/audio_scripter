@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="600" viewBox="0 0 1200 600">
+  <defs>
+    <linearGradient id="bg" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0%" stop-color="#0b1220"/>
+      <stop offset="100%" stop-color="#071018"/>
+    </linearGradient>
+    <linearGradient id="card" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0%" stop-color="#0f1a2a"/>
+      <stop offset="100%" stop-color="#0b1220"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1200" height="600" fill="url(#bg)"/>
+
+  <!-- Top bar -->
+  <rect x="0" y="0" width="1200" height="48" fill="#0b1622"/>
+  <text x="20" y="32" font-family="Arial, Helvetica, sans-serif" font-size="16" fill="#e6f0ff">audio_scripter - Editor</text>
+
+  <!-- Left sidebar (file list) -->
+  <rect x="16" y="72" width="220" height="504" rx="8" fill="#071827" stroke="#123244"/>
+  <g transform="translate(32,92)">
+    <rect width="176" height="18" rx="4" fill="#0e2a3a"/>
+    <rect y="30" width="140" height="12" rx="3" fill="#0b2633"/>
+    <rect y="50" width="160" height="12" rx="3" fill="#0b2633"/>
+    <rect y="70" width="120" height="12" rx="3" fill="#0b2633"/>
+    <rect y="90" width="100" height="12" rx="3" fill="#0b2633"/>
+  </g>
+
+  <!-- Main editor card -->
+  <rect x="256" y="72" width="650" height="504" rx="8" fill="url(#card)" stroke="#132733"/>
+  <!-- fake code lines -->
+  <g transform="translate(276,92)">
+    <!-- gutter -->
+    <rect width="36" height="464" fill="#071a22" rx="4"/>
+    <g transform="translate(44,0)">
+      <rect y="0" width="540" height="18" rx="3" fill="#092f44"/>
+      <rect y="26" width="480" height="12" rx="3" fill="#0c3b54"/>
+      <rect y="46" width="520" height="12" rx="3" fill="#0c3b54"/>
+      <rect y="66" width="300" height="12" rx="3" fill="#0c3b54"/>
+      <rect y="86" width="520" height="12" rx="3" fill="#0c3b54"/>
+      <rect y="106" width="520" height="12" rx="3" fill="#0c3b54"/>
+      <rect y="126" width="420" height="12" rx="3" fill="#0c3b54"/>
+      <rect y="146" width="520" height="12" rx="3" fill="#0c3b54"/>
+      <rect y="166" width="220" height="12" rx="3" fill="#0c3b54"/>
+      <rect y="186" width="520" height="12" rx="3" fill="#0c3b54"/>
+    </g>
+  </g>
+
+  <!-- Right inspector / waveform -->
+  <rect x="924" y="72" width="260" height="504" rx="8" fill="#071827" stroke="#123244"/>
+  <text x="946" y="100" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#bcdcff">Waveform</text>
+  <rect x="936" y="112" width="236" height="132" rx="6" fill="#091726" stroke="#11334a"/>
+  <path d="M946 174 C 980 150, 1020 196, 1060 170 C 1096 150, 1136 206, 1166 170" fill="none" stroke="#42d1ff" stroke-width="3" stroke-linecap="round"/>
+
+  <!-- Compile/Run buttons -->
+  <rect x="276" y="36" width="120" height="24" rx="6" fill="#153b4f"/>
+  <text x="296" y="52" font-family="Arial" font-size="12" fill="#dff6ff">Compile</text>
+  <rect x="406" y="36" width="120" height="24" rx="6" fill="#1a5a39"/>
+  <text x="428" y="52" font-family="Arial" font-size="12" fill="#e6ffef">Run</text>
+
+  <!-- Footer note -->
+  <text x="20" y="588" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#6f8fa6">Mockup screenshot — editor UI</text>
+</svg>
