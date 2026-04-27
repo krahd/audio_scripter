@@ -1,4 +1,5 @@
 #include "PluginEditor.h"
+#include <algorithm>
 
 
 AudioScripterAudioProcessorEditor::AudioScripterAudioProcessorEditor (AudioScripterAudioProcessor& p)
@@ -42,7 +43,11 @@ AudioScripterAudioProcessorEditor::AudioScripterAudioProcessorEditor (AudioScrip
         {
             juce::Array<juce::File> files;
             examplesDir.findChildFiles (files, juce::File::findFiles, false, "*.ascr");
-            files.sort ([] (const juce::File& a, const juce::File& b) { return a.getFileName().compareNatural (b.getFileName()) < 0; });
+            if (files.size() > 1)
+            {
+                std::sort(files.getRawDataPointer(), files.getRawDataPointer() + files.size(),
+                          [] (const juce::File& a, const juce::File& b) { return a.getFileName().compareNatural (b.getFileName()) < 0; });
+            }
             for (int i = 0; i < files.size(); ++i)
             {
                 examplesBox.addItem (files[i].getFileNameWithoutExtension(), i + 2);
