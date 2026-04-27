@@ -37,9 +37,10 @@ This document audits the current `audio_scripter` codebase and proposes a concre
 2. **Runtime semantics drift from spec/docs**
    - Language spec says defaults are `outL=inL`, `outR=inR`; engine currently initializes outputs to `0.0f`, which can mute passthrough behavior unless script explicitly writes outputs.
 
-3. **Function registry is only partially implemented**
-   - Engine clears registry and only explicitly registers `sin`, while docs/help/examples imply broad function support.
-   - Function-call path includes TODO/no-op behavior for user-defined functions.
+3. **Function registry and user-defined calls (resolved)**
+   - Built-ins are now registered from a centralized registry implementation.
+   - User-defined function calls (`fn` + `return`) now execute with recursion and execution safety guards.
+
 
 4. **Quality gates are incomplete for realtime DSP confidence**
    - Current script validator is static and useful, but there are no unit tests for tokenizer/parser semantics, no deterministic DSP golden tests, and no CI matrix for plugin build targets.
