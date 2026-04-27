@@ -74,7 +74,7 @@ def lint_file(path: Path) -> list[str]:
         # Check for unknown functions (allow user-defined)
         for match in FUNCTION_RE.finditer(line):
             fn = match.group(1)
-            if fn not in ALLOWED_FUNCTIONS and fn not in user_functions and fn not in {"if", "for", "while"}:
+            if fn not in ALLOWED_FUNCTIONS and fn not in user_functions and fn not in {"if", "for", "while", "return"}:
                 errors.append(f"{path.name}:{idx}: unknown function '{fn}'")
 
     if statements == 0:

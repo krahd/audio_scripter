@@ -1,6 +1,12 @@
-# Advanced example using reusable intermediate stages
-amount = 0.5 + 0.5 * sin(t * 0.2);
-fL = lpf1(inL, 0.08, 0);
-fR = lpf1(inR, 0.08, 1);
-outL = clip(mix(inL, fL, amount), -0.8, 0.8);
-outR = clip(mix(inR, fR, amount), -0.8, 0.8);
+# High-pass filter: subtracts one-pole LPF from input to isolate high frequencies
+# Creates a thin, bright, no-bass sound; add resonance for a sharp peak at cutoff
+# p1 = cutoff (low=heavy bass cut, high=gentle), p2 = resonance feedback, p3 = dry/wet
+coeff = 0.005 + p1 * 0.3;
+lpL = lpf1(inL + state_hpFbL * p2 * 0.7, coeff, 0);
+lpR = lpf1(inR + state_hpFbR * p2 * 0.7, coeff, 1);
+hpL = inL - lpL;
+hpR = inR - lpR;
+state_hpFbL = hpL;
+state_hpFbR = hpR;
+outL = mix(inL, hpL, p3);
+outR = mix(inR, hpR, p3);

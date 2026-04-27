@@ -1,14 +1,7 @@
-# Power waveshaper: exponent continuously morphs between soft and hard clipping
-# p1 = exponent curve (0=very soft, 1=linear, higher=harder), p2 = drive, p3 = dry/wet
-fn powShape(x, exp_val) {
-    a = abs(x);
-    s = select(gt(x, 0.0), 1.0, -1.0);
-    return s * pow(clamp(a, 0.0, 1.0), exp_val);
-}
-
-exponent = 0.1 + (1.0 - p1) * 0.9;
-drive = 1.0 + p2 * 5.0;
-shL = powShape(clamp(inL * drive, -1.0, 1.0), exponent);
-shR = powShape(clamp(inR * drive, -1.0, 1.0), exponent);
-outL = mix(inL, shL, p3);
-outR = mix(inR, shR, p3);
+# Ring modulator: multiply signal by a sine carrier for metallic, bell-like tones
+# p1 = carrier frequency (20–2000 Hz), p2 = stereo phase spread, p3 = dry/wet
+carrier_hz = 20.0 + p1 * 1980.0;
+modL = sin(6.2831853 * carrier_hz * t);
+modR = sin(6.2831853 * carrier_hz * t + p2 * 3.14159);
+outL = mix(inL, inL * modL, p3);
+outR = mix(inR, inR * modR, p3);

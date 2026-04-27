@@ -13,6 +13,7 @@ AudioScripterAudioProcessorEditor::AudioScripterAudioProcessorEditor (AudioScrip
     addAndMakeVisible (titleLabel);
 
     scriptEditor.setFont (juce::FontOptions (15.0f));
+    scriptEditor.setLineSpacing (1.5f);
     scriptEditor.setMultiLine (true);
     scriptEditor.setReturnKeyStartsNewLine (true);
     scriptEditor.setTabKeyUsedAsCharacter (true);

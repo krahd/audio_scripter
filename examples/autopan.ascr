@@ -1,6 +1,8 @@
-# Parser smoke test script
-n = 5;
-acc = 1;
-acc = acc * n;
-outL = inL * 0.9;
-outR = inR * 0.9;
+# Auto-pan: sine LFO sweeps audio between left and right channels
+# p1 = pan rate (0.2–5 Hz), p2 = pan depth, p3 = dry/wet
+rate = 0.2 + p1 * 4.8;
+lfo = sin(6.2831853 * rate * t);
+panL = clamp(1.0 + lfo * p2, 0.0, 1.0);
+panR = clamp(1.0 - lfo * p2, 0.0, 1.0);
+outL = mix(inL, inL * panL, p3);
+outR = mix(inR, inR * panR, p3);

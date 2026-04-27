@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3 tools/validate_scripts.py)",
+      "Bash(cmake --build . --config Release --target audio_scripter_parser_tests)",
+      "Bash(ctest --test-dir build --output-on-failure)",
+      "Bash(gh run *)",
+      "Bash(git mv *)",
+      "Bash(cmake --build build --config Release --target audio_scripter_parser_tests)"
+    ]
+  }
+}

@@ -432,44 +432,104 @@ outR = inR * mix(depthR, 1.0, mod);
 
 juce::String helpText()
 {
-    return R"(audio_scripter language quick guide
+    return R"(  audio_scripter — language reference
 
-Statements
-- One statement per line: variable = expression;
-- Comments start with #
+OVERVIEW
+  The script runs once per audio sample, top to bottom.
+  Assign outL and outR to produce output (they default to inL, inR).
 
-Built-in inputs
-- inL, inR : input samples
-- sr       : sample rate
-- t        : absolute time in seconds
-- p1..p8   : user macro controls (automatable)
+  x = expression;        assignment — must end with ;
+  # comment              everything after # is ignored
 
-Outputs
-- outL, outR : assign these to emit audio
+SPECIAL VARIABLES  (read-only except outL / outR)
+  inL, inR    current input sample (-1.0 to 1.0)
+  outL, outR  output sample (pre-set to inL, inR each sample)
+  sr          sample rate in Hz  (e.g. 44100.0)
+  t           elapsed time in seconds, grows continuously
+  p1 .. p8    macro knobs, always in range 0.0 – 1.0, automatable
 
-Math operators
-- + - * /
+STATE VARIABLES
+  Any variable whose name starts with state_ persists between samples.
+  Use them to build oscillators, filters, envelope followers, etc.
 
-Functions
-- sin(x), cos(x), tan(x), abs(x), sqrt(x), exp(x), log(x), tanh(x)
-- min(a,b), max(a,b), pow(a,b)
-- clamp(x, lo, hi), clip(x, lo, hi)
-- mix(a, b, amount)
-- wrap(x, lo, hi)
-- fold(x, lo, hi)
-- crush(x, steps)
-- smoothstep(edge0, edge1, x)
-- noise(seed)
-- gt(a,b), lt(a,b), ge(a,b), le(a,b)
-- select(cond, a, b)
-- pulse(freqHz, duty)
-- env(x, attack, release [, id])
-- lpf1(x, coeff [, id])      # one-pole low-pass (stateful)
-- slew(target, speed [, id]) # slew limiter (stateful)
+    state_phase = wrap(state_phase + 440.0 / sr, 0.0, 1.0);
+    tone = sin(6.2831853 * state_phase);
 
-State variables
-- Any variable starting with state_ is persistent across samples.
-- Optional function id lets you keep separate states per channel.
+OPERATORS
+  +  -  *  /           arithmetic (/ returns 0 when divisor is 0)
+  -x                   unary minus
+  true  false          boolean literals (1.0 / 0.0)
+
+CONTROL FLOW
+  if (condition) { ... } else { ... }
+  while (condition) { ... }
+  for (i = 0; 8) { ... }    i iterates 0, 1, 2 … 7 (integer steps)
+  fn name(a, b) { return a + b; }
+
+  Note: use gt/lt/ge/le/select for comparisons — < > == are not operators.
+
+MATH FUNCTIONS
+  sin(x)          sine; x in radians  (2*pi = 6.2831853)
+  cos(x)          cosine
+  tan(x)          tangent — clips very sharply near ±pi/2
+  abs(x)          absolute value
+  sqrt(x)         square root  (x clamped to 0 internally)
+  exp(x)          e raised to x
+  log(x)          natural logarithm  (x clamped to 1e-12 internally)
+  tanh(x)         hyperbolic tangent — smooth clipper, output in (-1, 1)
+  pow(a, b)       a raised to power b
+  min(a, b)       smaller of two values
+  max(a, b)       larger of two values
+
+SHAPING FUNCTIONS
+  clamp(x, lo, hi)        hard-limit x to [lo, hi]
+  clip(x, lo, hi)         alias for clamp
+  mix(a, b, t)            linear interpolate: a + (b - a) * t
+  wrap(x, lo, hi)         wrap x cyclically inside [lo, hi]
+  fold(x, lo, hi)         fold x back at boundaries (wave-folder)
+  crush(x, steps)         quantise to N amplitude levels (bit-crusher)
+  smoothstep(e0, e1, x)   smooth 0->1 S-curve between e0 and e1
+
+DSP / CREATIVE FUNCTIONS
+  noise(seed)             deterministic hash noise, output in (-1, 1)
+                          use noise(t * sr) for per-sample white noise
+
+  pulse(hz, duty)         square wave: 1.0 while phase < duty, else 0.0
+                          phase is based on absolute time t
+
+  env(x, atk, rel, id)   envelope follower on signal x
+                          atk, rel are per-sample smoothing coefficients
+                          id (optional int) keeps separate state per lane
+
+  lpf1(x, coeff, id)     one-pole low-pass filter
+                          coeff ~0.002 = very dark, ~0.5 = bright
+                          id (optional) separates state per lane
+
+  slew(target, speed, id) slew-rate limiter — moves toward target
+                          at most speed units per sample
+
+COMPARISON / LOGIC  (return 1.0 for true, 0.0 for false)
+  gt(a, b)        1.0 if a > b
+  lt(a, b)        1.0 if a < b
+  ge(a, b)        1.0 if a >= b
+  le(a, b)        1.0 if a <= b
+  select(c, a, b) returns a if c != 0, else b
+
+QUICK RECIPES
+  # Sine oscillator via phase accumulator
+  state_ph = wrap(state_ph + 440.0 / sr, 0.0, 1.0);
+  outL = sin(6.2831853 * state_ph);  outR = outL;
+
+  # Envelope-controlled gate
+  amp = env(abs(inL), 0.001, 0.05, 0);
+  outL = inL * smoothstep(0.01, 0.1, amp);
+
+  # Ring modulator at 200 Hz
+  outL = inL * sin(6.2831853 * 200.0 * t);
+
+  # User-defined function
+  fn softSat(x, drive) { return tanh(x * drive) / drive; }
+  outL = softSat(inL, 3.0);  outR = softSat(inR, 3.0);
 )";
 }
 } // namespace scripting
