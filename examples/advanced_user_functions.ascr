@@ -1,4 +1,5 @@
-fR = lpf1(inR, 0.08);
+outL = saturate(mix(inL, fL, amount), 0.8);
+outR = saturate(mix(inR, fR, amount), 0.8);
 outL = saturate(mix(inL, fL, amount), 0.8);
 outR = saturate(mix(inR, fR, amount), 0.8);
 # Advanced Example: User-defined Functions and Control Flow
