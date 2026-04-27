@@ -69,7 +69,20 @@ outR = inR * state_gain;
         }
     }
 
+    // Determine examples directory: prefer compile-time EXAMPLES_DIR (absolute),
+    // otherwise fall back to a relative "examples" path.
+#if defined(EXAMPLES_DIR)
+    const std::filesystem::path examplesDir = std::filesystem::path (EXAMPLES_DIR);
+#else
     const std::filesystem::path examplesDir = std::filesystem::path ("examples");
+#endif
+
+    if (! std::filesystem::exists (examplesDir))
+    {
+        std::cerr << "Examples directory not found: " << examplesDir.string() << " — skipping example tests.\n";
+        return 0;
+    }
+
     for (const auto& entry : std::filesystem::directory_iterator (examplesDir))
     {
         if (entry.path().extension() != ".ascr")

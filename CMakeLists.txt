@@ -80,6 +80,10 @@ if (AUDIO_SCRIPTER_BUILD_TESTS)
     juce::juce_recommended_config_flags
     juce::juce_recommended_lto_flags
     juce::juce_recommended_warning_flags)
+  # Provide the absolute examples directory to the test so it can locate example scripts
+  target_compile_definitions(audio_scripter_parser_tests PRIVATE EXAMPLES_DIR="${CMAKE_SOURCE_DIR}/examples")
 
+  # Run the test with the project source directory as the working directory to keep behavior consistent
   add_test(NAME audio_scripter_parser_tests COMMAND audio_scripter_parser_tests)
+  set_tests_properties(audio_scripter_parser_tests PROPERTIES WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
 endif()
