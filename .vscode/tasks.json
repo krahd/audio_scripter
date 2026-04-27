@@ -2,6 +2,65 @@
   "version": "2.0.0",
   "tasks": [
     {
+      "label": "Build audio_scripter (Release)",
+      "type": "shell",
+      "command": "bash",
+      "args": [
+        "${workspaceFolder}/scripts/build_release.sh",
+        "--config",
+        "Release"
+      ],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      },
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Build audio_scripter (Release) + package",
+      "type": "shell",
+      "command": "bash",
+      "args": [
+        "${workspaceFolder}/scripts/build_release.sh",
+        "--config",
+        "Release",
+        "--tests",
+        "--package"
+      ],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      },
+      "group": "build",
+      "problemMatcher": []
+    },
+    {
+      "label": "Build audio_scripter (Debug) + install",
+      "type": "shell",
+      "command": "bash",
+      "args": [
+        "${workspaceFolder}/scripts/build_release.sh",
+        "--config",
+        "Debug",
+        "--install"
+      ],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      },
+      "group": "build",
+      "problemMatcher": []
+    }
+  ]
+}
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
         "label": "Run standalone app",
         "type": "shell",
         "command": "open",
