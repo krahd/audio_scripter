@@ -20,7 +20,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Configure
-        run: cmake -S . -B build
+        run: cmake -S . -B build -DAUDIO_SCRIPTER_BUILD_PLUGIN=OFF
       - name: Build
         run: cmake --build build --config Release --target audio_scripter_parser_tests
       - name: Run tests
