@@ -4,6 +4,7 @@ project(audio_scripter VERSION 1.0.5)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+option(AUDIO_SCRIPTER_BUILD_TESTS "Build lightweight parser tests" ON)
 
 set(AUDIO_SCRIPTER_JUCE_PATH "" CACHE PATH "Path to a local JUCE checkout (optional)")
 
@@ -60,3 +61,22 @@ target_link_libraries(audio_scripter PRIVATE
   juce::juce_recommended_config_flags
   juce::juce_recommended_lto_flags
   juce::juce_recommended_warning_flags)
+
+if (AUDIO_SCRIPTER_BUILD_TESTS)
+  enable_testing()
+
+  add_executable(audio_scripter_parser_tests
+    tests/ScriptParserTests.cpp
+    Source/ScriptParser.cpp
+    Source/ScriptTokenizer.cpp)
+
+  target_include_directories(audio_scripter_parser_tests PRIVATE Source)
+
+  target_link_libraries(audio_scripter_parser_tests PRIVATE
+    juce::juce_core
+    juce::juce_recommended_config_flags
+    juce::juce_recommended_lto_flags
+    juce::juce_recommended_warning_flags)
+
+  add_test(NAME audio_scripter_parser_tests COMMAND audio_scripter_parser_tests)
+endif()

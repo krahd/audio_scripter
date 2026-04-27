@@ -1,21 +1,6 @@
-outL = saturate(mix(inL, fL, amount), 0.8);
-outR = saturate(mix(inR, fR, amount), 0.8);
-outL = saturate(mix(inL, fL, amount), 0.8);
-outR = saturate(mix(inR, fR, amount), 0.8);
-# Advanced Example: User-defined Functions and Control Flow
-
-fn saturate(x, drive) {
-    if (x > 1.0) {
-        return 1.0;
-    } else if (x < -1.0) {
-        return -1.0;
-    } else {
-        return x * drive;
-    }
-};
-
+# Advanced example using reusable intermediate stages
 amount = 0.5 + 0.5 * sin(t * 0.2);
-fL = lpf1(inL, 0.08);
-fR = lpf1(inR, 0.08);
-outL = saturate(mix(inL, fL, amount), 0.8);
-outR = saturate(mix(inR, fR, amount), 0.8);
+fL = lpf1(inL, 0.08, 0);
+fR = lpf1(inR, 0.08, 1);
+outL = clip(mix(inL, fL, amount), -0.8, 0.8);
+outR = clip(mix(inR, fR, amount), -0.8, 0.8);
