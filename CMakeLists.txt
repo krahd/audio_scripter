@@ -24,7 +24,7 @@ endif()
 
 if (AUDIO_SCRIPTER_BUILD_PLUGIN)
   juce_add_plugin(audio_scripter
-    COMPANY_NAME "Audio Scripter"
+    COMPANY_NAME "Tomas Laurenzo"
     BUNDLE_ID com.audioscripter.plugin
     IS_SYNTH FALSE
     NEEDS_MIDI_INPUT FALSE
