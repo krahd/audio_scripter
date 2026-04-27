@@ -25,7 +25,9 @@ private:
     AudioScripterAudioProcessor& processor;
 
     juce::Label titleLabel;
-    juce::TextEditor scriptEditor;
+    juce::CodeDocument codeDocument;
+    std::unique_ptr<juce::CodeEditorComponent> scriptEditor;
+    std::unique_ptr<juce::CPlusPlusCodeTokeniser> codeTokeniser;
     juce::TextEditor outputPanel;
     juce::TextButton applyButton { "Apply" };
     juce::TextButton saveButton { "Save" };

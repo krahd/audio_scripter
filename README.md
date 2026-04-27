@@ -1,4 +1,4 @@
-# audio_scripter 1.0.6
+# audio_scripter 1.0.7
 
 `audio_scripter` is a JUCE-based real-time scriptable audio effect plugin for **VST3**, **AU**, and **Standalone**.
 
