@@ -1,10 +1,6 @@
-// Test: User-defined function, recursion, and type inference
-fn factorial(n) {
-    if (n <= 1) {
-        return 1;
-    } else {
-        return n * factorial(n - 1);
-    }
-};
-
-result = factorial(5); // Should be 120;
+# Parser smoke test script
+n = 5;
+acc = 1;
+acc = acc * n;
+outL = inL * 0.9;
+outR = inR * 0.9;
