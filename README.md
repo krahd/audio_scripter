@@ -158,6 +158,13 @@ Below are placeholder screenshots. Replace these with real captures from the edi
 python3 tools/validate_scripts.py
 ```
 
+Parser test target (after CMake configure):
+
+```bash
+cmake --build build --target audio_scripter_parser_tests
+ctest --test-dir build --output-on-failure
+```
+
 ## Release docs
 
 - Language spec: `docs/LANGUAGE_SPEC.md`
