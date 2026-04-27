@@ -6,7 +6,7 @@ AudioScripterAudioProcessor::AudioScripterAudioProcessor()
     : AudioProcessor (BusesProperties()
                       .withInput  ("Input", juce::AudioChannelSet::stereo(), true)
                       .withOutput ("Output", juce::AudioChannelSet::stereo(), true)),
-      parameters (*this, nullptr, "PARAMETERS", createParameterLayout())
+    parameters (*this, nullptr, juce::Identifier ("PARAMETERS"), createParameterLayout())
 {
     for (int i = 0; i < 8; ++i)
         macroParamAtoms[(size_t) i] = parameters.getRawParameterValue (macroParamId (i));

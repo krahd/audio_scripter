@@ -4,6 +4,7 @@
 #include "Constants.h"
 #include "ScriptParser.h"
 #include <atomic>
+#include <memory>
 
 namespace scripting
 {
@@ -34,7 +35,9 @@ private:
     std::shared_ptr<const CompiledProgram> getProgramSnapshot() const;
     void enforcePersistentStateLimit();
 
-    std::atomic<std::shared_ptr<const CompiledProgram>> activeProgram;
+    // Use a plain shared_ptr and the atomic helper functions
+    // (std::atomic_store / std::atomic_load) for portability with libc++.
+    std::shared_ptr<const CompiledProgram> activeProgram;
     std::map<juce::String, float> persistentState;
     std::atomic<bool> stateResetRequested { false };
     double currentSampleRate { 44100.0 };

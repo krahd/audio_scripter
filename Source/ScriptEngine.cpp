@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <memory>
 
 namespace scripting
 {
@@ -212,7 +213,8 @@ ScriptEngine::CompileResult ScriptEngine::compileAndInstall (const juce::String&
     compiled->program = std::move (result.program);
     compiled->source = source;
 
-    activeProgram.store (std::shared_ptr<const CompiledProgram> (compiled));
+    // Use the atomic shared_ptr helpers for portability with libc++.
+    std::atomic_store(&activeProgram, std::shared_ptr<const CompiledProgram> (compiled));
     stateResetRequested.store (true);
     lastError.clear();
     return { true, {} };
@@ -241,7 +243,7 @@ juce::String ScriptEngine::getLastError() const
 
 std::shared_ptr<const CompiledProgram> ScriptEngine::getProgramSnapshot() const
 {
-    return activeProgram.load();
+    return std::atomic_load(&activeProgram);
 }
 
 constexpr size_t kMaxPersistentStateEntries = 128;

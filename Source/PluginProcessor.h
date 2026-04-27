@@ -4,7 +4,6 @@
 #include <array>
 #include "ScriptEngine.h"
 
-inline constexpr int kNumMacros = 8;
 
 inline juce::String macroParamId (int index)
 {
