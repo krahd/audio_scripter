@@ -1,4 +1,4 @@
-# audio_scripter 1.0.5
+# audio_scripter 1.0.6
 
 `audio_scripter` is a JUCE-based real-time scriptable audio effect plugin for **VST3**, **AU**, and **Standalone**.
 
@@ -59,7 +59,7 @@ variable = expression;
 ### Functions
 
 - Math: `sin`, `cos`, `tan`, `abs`, `sqrt`, `exp`, `log`, `tanh`, `pow`, `min`, `max`
-# audio_scripter 1.0.5
+# audio_scripter 1.0.6
 
 `audio_scripter` is a JUCE-based real-time scriptable audio effect plugin for **VST3**, **AU**, and **Standalone**.
 

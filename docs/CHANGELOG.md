@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.0.6 - 2026-04-27
+
+### Added
+- Release packaging and CI-triggered binary artifacts for macOS and Windows.
+
+### Changed
+- Bump version to `1.0.6` and update README and About box text.
+- Trigger release workflow via pushed annotated tag `v1.0.6`.
+
 ## 1.0.5 - 2026-04-24
 
 ### Changed
