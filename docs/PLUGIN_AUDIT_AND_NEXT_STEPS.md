@@ -116,3 +116,4 @@ This document audits the current `audio_scripter` codebase and proposes a concre
 - **Realtime safety:** bounded per-sample cost and no unbounded constructs without guardrails.
 - **UX:** compile/apply loop is fast, errors are understandable, and examples are trustworthy.
 - **Release quality:** cross-platform builds reproducible with CI, docs current, and regression suite green.
+
