@@ -6,7 +6,7 @@ AudioScripterAudioProcessorEditor::AudioScripterAudioProcessorEditor (AudioScrip
 {
     setSize (1020, 760);
 
-    titleLabel.setText ("audio_scripter 1.0.6 — script your own impossible effects", juce::dontSendNotification);
+    titleLabel.setText ("audio_scripter 1.0.6", juce::dontSendNotification);
     titleLabel.setJustificationType (juce::Justification::centredLeft);
     titleLabel.setFont (juce::FontOptions (18.0f, juce::Font::bold));
     addAndMakeVisible (titleLabel);
@@ -34,9 +34,36 @@ AudioScripterAudioProcessorEditor::AudioScripterAudioProcessorEditor (AudioScrip
 
     examplesBox.addListener (this);
     examplesBox.addItem ("Select example...", 1);
-    const auto names = scripting::exampleNames();
-    for (int i = 0; i < names.size(); ++i)
-        examplesBox.addItem (names[i], i + 2);
+
+#if defined(EXAMPLES_DIR)
+    {
+        juce::File examplesDir (EXAMPLES_DIR);
+        if (examplesDir.isDirectory())
+        {
+            juce::Array<juce::File> files;
+            examplesDir.findChildFiles (files, juce::File::findFiles, false, "*.ascr");
+            files.sort ([] (const juce::File& a, const juce::File& b) { return a.getFileName().compareNatural (b.getFileName()) < 0; });
+            for (int i = 0; i < files.size(); ++i)
+            {
+                examplesBox.addItem (files[i].getFileNameWithoutExtension(), i + 2);
+                exampleFiles.push_back (files[i]);
+            }
+        }
+        else
+        {
+            const auto names = scripting::exampleNames();
+            for (int i = 0; i < names.size(); ++i)
+                examplesBox.addItem (names[i], i + 2);
+        }
+    }
+#else
+    {
+        const auto names = scripting::exampleNames();
+        for (int i = 0; i < names.size(); ++i)
+            examplesBox.addItem (names[i], i + 2);
+    }
+#endif
+
     addAndMakeVisible (examplesBox);
 
     for (int i = 0; i < 8; ++i)
@@ -137,8 +164,22 @@ void AudioScripterAudioProcessorEditor::comboBoxChanged (juce::ComboBox* box)
         return;
 
     const auto idx = examplesBox.getSelectedId() - 2;
-    if (idx >= 0)
-        scriptEditor.setText (scripting::exampleScript (idx));
+    if (idx < 0)
+        return;
+
+    // If we have example files discovered at runtime, load the file contents.
+    if (idx < (int) exampleFiles.size())
+    {
+        const auto file = exampleFiles[(size_t) idx];
+        if (file.existsAsFile())
+            scriptEditor.setText (file.loadFileAsString(), false);
+        return;
+    }
+
+    // Fallback to built-in indexed examples (if available).
+    const auto fallbackIdx = idx - (int) exampleFiles.size();
+    if (fallbackIdx >= 0)
+        scriptEditor.setText (scripting::exampleScript (fallbackIdx));
 }
 
 void AudioScripterAudioProcessorEditor::applyScript()

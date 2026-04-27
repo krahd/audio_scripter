@@ -31,6 +31,7 @@ private:
     juce::TextButton saveButton { "Save" };
     juce::TextButton loadButton { "Load" };
     juce::ComboBox examplesBox;
+    std::vector<juce::File> exampleFiles;
     juce::TextEditor helpPanel;
 
     std::array<juce::Slider, 8> macroSliders;

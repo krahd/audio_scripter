@@ -52,6 +52,9 @@ if (AUDIO_SCRIPTER_BUILD_PLUGIN)
     JUCE_WEB_BROWSER=0
     JUCE_USE_CURL=0)
 
+  # Provide examples dir path to the plugin so the editor can load example files at runtime
+  target_compile_definitions(audio_scripter PRIVATE EXAMPLES_DIR="${CMAKE_SOURCE_DIR}/examples")
+
   # Suppress JUCE VST3/VST2 parameter ID mismatch error for local builds
   target_compile_definitions(audio_scripter PRIVATE
     JUCE_IGNORE_VST3_MISMATCHED_PARAMETER_ID_WARNING=1)
