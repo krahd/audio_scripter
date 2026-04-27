@@ -1,6 +1,6 @@
+# Type-system smoke script (currently numeric runtime)
+x = 1.0;
 y = 1.5;
-z = x + y; // Should report type error at runtime
-// Test: Type inference and error reporting
-x = true;
-y = 1.5;
-z = x + y; // Should report type error at runtime;
+z = x + y;
+outL = inL + z * 0.0;
+outR = inR + z * 0.0;

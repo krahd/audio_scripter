@@ -158,6 +158,30 @@ Below are placeholder screenshots. Replace these with real captures from the edi
 python3 tools/validate_scripts.py
 ```
 
+Parser test target (after CMake configure):
+
+```bash
+cmake --build build --target audio_scripter_parser_tests
+ctest --test-dir build --output-on-failure
+```
+
+## Automated plugin releases
+
+This repository includes a GitHub Actions workflow at `.github/workflows/release.yml` that builds plugin binaries and attaches them to a GitHub Release when you push a version tag (for example `v1.0.6`).
+
+Release assets produced:
+- macOS: VST3, AU, Standalone app (zip)
+- Windows: VST3, Standalone exe (zip)
+
+Create a release with downloadable binaries:
+
+```bash
+git tag v1.0.6
+git push origin v1.0.6
+```
+
+You can also run the same pipeline manually from the **Actions** tab using `workflow_dispatch`.
+
 ## Release docs
 
 - Language spec: `docs/LANGUAGE_SPEC.md`

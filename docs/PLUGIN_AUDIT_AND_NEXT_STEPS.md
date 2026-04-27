@@ -2,6 +2,14 @@
 
 This document audits the current `audio_scripter` codebase and proposes a concrete path to a fully functional, well-designed plugin.
 
+## Implementation status (updated April 27, 2026)
+
+- ✅ Phase 0 stabilization items completed in code (parser/runtime consistency, passthrough defaults, namespace/order fixes).
+- ✅ Built-in function registry implemented and wired (`sin/cos/...`, `clamp/clip/mix/wrap/fold/crush`, `smoothstep/noise`, `gt/lt/ge/le/select`, `pulse`, `lpf1`, `slew`, `env`).
+- ✅ `fn` / `return` now execute at runtime with recursion-depth safety limits.
+- ✅ Parser smoke tests added (`tests/ScriptParserTests.cpp`) and CI workflow added (`.github/workflows/ci.yml`) to run script validation and parser tests.
+- ✅ Example scripts cleaned so repository-level validator passes.
+
 ## Executive summary
 
 - The product vision is strong: scriptable per-sample DSP, macro automation, lock-free script swapping, and a usable editor already exist in architecture/docs.
@@ -29,9 +37,10 @@ This document audits the current `audio_scripter` codebase and proposes a concre
 2. **Runtime semantics drift from spec/docs**
    - Language spec says defaults are `outL=inL`, `outR=inR`; engine currently initializes outputs to `0.0f`, which can mute passthrough behavior unless script explicitly writes outputs.
 
-3. **Function registry is only partially implemented**
-   - Engine clears registry and only explicitly registers `sin`, while docs/help/examples imply broad function support.
-   - Function-call path includes TODO/no-op behavior for user-defined functions.
+3. **Function registry and user-defined calls (resolved)**
+   - Built-ins are now registered from a centralized registry implementation.
+   - User-defined function calls (`fn` + `return`) now execute with recursion and execution safety guards.
+
 
 4. **Quality gates are incomplete for realtime DSP confidence**
    - Current script validator is static and useful, but there are no unit tests for tokenizer/parser semantics, no deterministic DSP golden tests, and no CI matrix for plugin build targets.

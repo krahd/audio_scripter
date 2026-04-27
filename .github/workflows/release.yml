@@ -1,0 +1,80 @@
+name: release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake -S . -B build -DAUDIO_SCRIPTER_BUILD_TESTS=OFF
+
+      - name: Build plugin binaries
+        run: cmake --build build --config Release
+
+      - name: Package macOS binaries
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          VST3_PATH=$(find build -type d -name '*.vst3' | head -n 1)
+          AU_PATH=$(find build -type d -name '*.component' | head -n 1)
+          APP_PATH=$(find build -type d -name '*.app' | head -n 1)
+          ditto -c -k --sequesterRsrc --keepParent "$VST3_PATH" "dist/audio_scripter-macos-vst3.zip"
+          ditto -c -k --sequesterRsrc --keepParent "$AU_PATH" "dist/audio_scripter-macos-au.zip"
+          ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" "dist/audio_scripter-macos-standalone.zip"
+
+      - name: Upload macOS release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-binaries
+          path: dist/*.zip
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake -S . -B build -DAUDIO_SCRIPTER_BUILD_TESTS=OFF
+
+      - name: Build plugin binaries
+        run: cmake --build build --config Release
+
+      - name: Package Windows binaries
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path dist -Force | Out-Null
+          $vst3Path = Get-ChildItem -Path build -Filter *.vst3 -Directory -Recurse | Select-Object -First 1
+          $exePath = Get-ChildItem -Path build -Filter *.exe -File -Recurse | Where-Object { $_.Name -like 'audio_scripter*' } | Select-Object -First 1
+          Compress-Archive -Path $vst3Path.FullName -DestinationPath dist/audio_scripter-windows-vst3.zip -Force
+          Compress-Archive -Path $exePath.FullName -DestinationPath dist/audio_scripter-windows-standalone.zip -Force
+
+      - name: Upload Windows release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-binaries
+          path: dist/*.zip
+
+  publish-release:
+    needs: [build-macos, build-windows]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download release artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/**/*.zip
+          generate_release_notes: true
