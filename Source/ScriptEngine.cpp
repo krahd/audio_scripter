@@ -1,31 +1,212 @@
 #include "ScriptEngine.h"
 
+#include <algorithm>
+#include <cmath>
+
 namespace scripting
 {
+namespace
+{
+float clampf (float x, float lo, float hi)
+{
+    return std::min (hi, std::max (lo, x));
+}
+
+float mixf (float a, float b, float amount)
+{
+    return a + (b - a) * amount;
+}
+
+float wrapf (float x, float lo, float hi)
+{
+    const auto width = hi - lo;
+    if (width <= 0.0f)
+        return lo;
+
+    auto y = std::fmod (x - lo, width);
+    if (y < 0.0f)
+        y += width;
+    return lo + y;
+}
+
+float foldf (float x, float lo, float hi)
+{
+    if (hi <= lo)
+        return lo;
+
+    auto y = x;
+    while (y < lo || y > hi)
+    {
+        if (y > hi)
+            y = hi - (y - hi);
+        else if (y < lo)
+            y = lo + (lo - y);
+    }
+
+    return y;
+}
+
+float smoothstepf (float edge0, float edge1, float x)
+{
+    if (std::abs (edge1 - edge0) < 1.0e-9f)
+        return x >= edge1 ? 1.0f : 0.0f;
+
+    const auto t = clampf ((x - edge0) / (edge1 - edge0), 0.0f, 1.0f);
+    return t * t * (3.0f - 2.0f * t);
+}
+
+float noisef (float seed)
+{
+    const auto v = std::sin (seed * 12.9898f) * 43758.5453f;
+    return 2.0f * (v - std::floor (v)) - 1.0f;
+}
+
+float getArg (const std::vector<float>& args, size_t index, float fallback = 0.0f)
+{
+    return index < args.size() ? args[index] : fallback;
+}
+
+juce::String stateKey (juce::String functionName, int lane)
+{
+    return "__" + functionName + "_" + juce::String (lane);
+}
+
+float readLaneState (EvalContext& ctx, juce::String functionName, int lane)
+{
+    if (ctx.persistentState == nullptr)
+        return 0.0f;
+
+    const auto key = stateKey (std::move (functionName), lane);
+    if (const auto it = ctx.persistentState->find (key); it != ctx.persistentState->end())
+        return it->second;
+
+    return 0.0f;
+}
+
+void writeLaneState (EvalContext& ctx, juce::String functionName, int lane, float value)
+{
+    if (ctx.persistentState == nullptr)
+        return;
+
+    (*ctx.persistentState)[stateKey (std::move (functionName), lane)] = value;
+}
+
+int laneFromArgs (const std::vector<float>& args, size_t index)
+{
+    return (int) std::lrint (getArg (args, index, 0.0f));
+}
+
+void registerBuiltins (FunctionRegistry& registry)
+{
+    registry.builtins.clear();
+
+    registry.builtins["sin"] = [] (EvalContext&, const std::vector<float>& a) { return std::sin (getArg (a, 0)); };
+    registry.builtins["cos"] = [] (EvalContext&, const std::vector<float>& a) { return std::cos (getArg (a, 0)); };
+    registry.builtins["tan"] = [] (EvalContext&, const std::vector<float>& a) { return std::tan (getArg (a, 0)); };
+    registry.builtins["abs"] = [] (EvalContext&, const std::vector<float>& a) { return std::abs (getArg (a, 0)); };
+    registry.builtins["sqrt"] = [] (EvalContext&, const std::vector<float>& a) { return std::sqrt (std::max (0.0f, getArg (a, 0))); };
+    registry.builtins["exp"] = [] (EvalContext&, const std::vector<float>& a) { return std::exp (getArg (a, 0)); };
+    registry.builtins["log"] = [] (EvalContext&, const std::vector<float>& a) { return std::log (std::max (1.0e-12f, getArg (a, 0))); };
+    registry.builtins["tanh"] = [] (EvalContext&, const std::vector<float>& a) { return std::tanh (getArg (a, 0)); };
+
+    registry.builtins["pow"] = [] (EvalContext&, const std::vector<float>& a) { return std::pow (getArg (a, 0), getArg (a, 1)); };
+    registry.builtins["min"] = [] (EvalContext&, const std::vector<float>& a) { return std::min (getArg (a, 0), getArg (a, 1)); };
+    registry.builtins["max"] = [] (EvalContext&, const std::vector<float>& a) { return std::max (getArg (a, 0), getArg (a, 1)); };
+
+    registry.builtins["clamp"] = [] (EvalContext&, const std::vector<float>& a) { return clampf (getArg (a, 0), getArg (a, 1), getArg (a, 2)); };
+    registry.builtins["clip"] = registry.builtins["clamp"];
+    registry.builtins["mix"] = [] (EvalContext&, const std::vector<float>& a) { return mixf (getArg (a, 0), getArg (a, 1), getArg (a, 2)); };
+    registry.builtins["wrap"] = [] (EvalContext&, const std::vector<float>& a) { return wrapf (getArg (a, 0), getArg (a, 1), getArg (a, 2)); };
+    registry.builtins["fold"] = [] (EvalContext&, const std::vector<float>& a) { return foldf (getArg (a, 0), getArg (a, 1), getArg (a, 2)); };
+    registry.builtins["crush"] = [] (EvalContext&, const std::vector<float>& a)
+    {
+        const auto x = getArg (a, 0);
+        const auto steps = std::max (1.0f, getArg (a, 1));
+        return std::round (x * steps) / steps;
+    };
+
+    registry.builtins["smoothstep"] = [] (EvalContext&, const std::vector<float>& a)
+    {
+        return smoothstepf (getArg (a, 0), getArg (a, 1), getArg (a, 2));
+    };
+
+    registry.builtins["noise"] = [] (EvalContext&, const std::vector<float>& a)
+    {
+        return noisef (getArg (a, 0));
+    };
+
+    registry.builtins["gt"] = [] (EvalContext&, const std::vector<float>& a) { return getArg (a, 0) >  getArg (a, 1) ? 1.0f : 0.0f; };
+    registry.builtins["lt"] = [] (EvalContext&, const std::vector<float>& a) { return getArg (a, 0) <  getArg (a, 1) ? 1.0f : 0.0f; };
+    registry.builtins["ge"] = [] (EvalContext&, const std::vector<float>& a) { return getArg (a, 0) >= getArg (a, 1) ? 1.0f : 0.0f; };
+    registry.builtins["le"] = [] (EvalContext&, const std::vector<float>& a) { return getArg (a, 0) <= getArg (a, 1) ? 1.0f : 0.0f; };
+    registry.builtins["select"] = [] (EvalContext&, const std::vector<float>& a) { return getArg (a, 0) != 0.0f ? getArg (a, 1) : getArg (a, 2); };
+
+    registry.builtins["pulse"] = [] (EvalContext& ctx, const std::vector<float>& a)
+    {
+        const auto freq = std::max (0.0f, getArg (a, 0));
+        const auto duty = clampf (getArg (a, 1), 0.0f, 1.0f);
+        const auto phase = std::fmod (ctx.t * freq, 1.0f);
+        return phase < duty ? 1.0f : 0.0f;
+    };
+
+    registry.builtins["lpf1"] = [] (EvalContext& ctx, const std::vector<float>& a)
+    {
+        const auto x = getArg (a, 0);
+        const auto coeff = clampf (getArg (a, 1), 0.0f, 1.0f);
+        const auto lane = laneFromArgs (a, 2);
+
+        auto y = readLaneState (ctx, "lpf1", lane);
+        y += coeff * (x - y);
+        writeLaneState (ctx, "lpf1", lane, y);
+        return y;
+    };
+
+    registry.builtins["slew"] = [] (EvalContext& ctx, const std::vector<float>& a)
+    {
+        const auto target = getArg (a, 0);
+        const auto speed = std::max (0.0f, getArg (a, 1));
+        const auto lane = laneFromArgs (a, 2);
+
+        auto current = readLaneState (ctx, "slew", lane);
+        const auto delta = clampf (target - current, -speed, speed);
+        current += delta;
+        writeLaneState (ctx, "slew", lane, current);
+        return current;
+    };
+
+    registry.builtins["env"] = [] (EvalContext& ctx, const std::vector<float>& a)
+    {
+        const auto x = std::abs (getArg (a, 0));
+        const auto attack = clampf (getArg (a, 1), 0.0f, 1.0f);
+        const auto release = clampf (getArg (a, 2), 0.0f, 1.0f);
+        const auto lane = laneFromArgs (a, 3);
+
+        auto y = readLaneState (ctx, "env", lane);
+        const auto coeff = x > y ? attack : release;
+        y += coeff * (x - y);
+        writeLaneState (ctx, "env", lane, y);
+        return y;
+    };
+}
+} // namespace
+
 ScriptEngine::CompileResult ScriptEngine::compileAndInstall (const juce::String& source)
 {
     ScriptParser parser;
     auto result = parser.parse (source);
 
-    // Build extensible function registry
-    result.program.functionRegistry.builtins.clear();
+    registerBuiltins (result.program.functionRegistry);
     result.program.functionRegistry.user.clear();
-    // Register built-in functions (example: sin)
-    result.program.functionRegistry.builtins["sin"] = [](EvalContext&, const std::vector<float>& args) { return std::sin(args[0]); };
-    // ...register other built-ins here...
-    for (const auto& stmt : result.program.statements) {
-        if (auto* fn = dynamic_cast<FunctionDefStatement*>(stmt.get())) {
-            result.program.functionRegistry.user[fn->name] = fn;
-        }
-    }
 
-    if (! result.errors.isEmpty()) {
-        lastError = result.errors.joinIntoString("\n");
+    for (const auto& stmt : result.program.statements)
+        if (auto* fn = dynamic_cast<FunctionDefStatement*> (stmt.get()))
+            result.program.functionRegistry.user[fn->name] = fn;
+
+    if (! result.errors.isEmpty())
+    {
+        lastError = result.errors.joinIntoString ("\n");
         return { false, result.errors };
     }
-juce::String ScriptEngine::getLastError() const {
-    return lastError;
-}
 
     auto compiled = std::make_shared<CompiledProgram>();
     compiled->program = std::move (result.program);
@@ -33,6 +214,7 @@ juce::String ScriptEngine::getLastError() const {
 
     activeProgram.store (std::shared_ptr<const CompiledProgram> (compiled));
     stateResetRequested.store (true);
+    lastError.clear();
     return { true, {} };
 }
 
@@ -52,19 +234,23 @@ juce::String ScriptEngine::getCurrentSource() const
     return {};
 }
 
+juce::String ScriptEngine::getLastError() const
+{
+    return lastError;
+}
+
 std::shared_ptr<const CompiledProgram> ScriptEngine::getProgramSnapshot() const
 {
     return activeProgram.load();
 }
 
 constexpr size_t kMaxPersistentStateEntries = 128;
+constexpr int kMaxInstructionsPerSample = 4096;
 
 void ScriptEngine::enforcePersistentStateLimit()
 {
-    while (persistentState.size() > kMaxPersistentStateEntries) {
-        // Remove oldest entry
-        persistentState.erase(persistentState.begin());
-    }
+    while (persistentState.size() > kMaxPersistentStateEntries)
+        persistentState.erase (persistentState.begin());
 }
 
 void ScriptEngine::processBlock (juce::AudioBuffer<float>& buffer, const std::array<float, 8>& macros)
@@ -74,18 +260,17 @@ void ScriptEngine::processBlock (juce::AudioBuffer<float>& buffer, const std::ar
         persistentState.clear();
         sampleCounter = 0;
     }
+
     const auto program = getProgramSnapshot();
     const int numChannels = buffer.getNumChannels();
     const int numSamples = buffer.getNumSamples();
 
-    // Macro parameter validation: clamp to [0, 1] and ensure finite
     std::array<float, 8> safeMacros;
-    for (size_t i = 0; i < 8; ++i) {
+    for (size_t i = 0; i < 8; ++i)
+    {
         float v = macros[i];
-        if (!std::isfinite(v)) v = 0.0f;
-        if (v < 0.0f) v = 0.0f;
-        if (v > 1.0f) v = 1.0f;
-        safeMacros[i] = v;
+        if (! std::isfinite (v)) v = 0.0f;
+        safeMacros[i] = clampf (v, 0.0f, 1.0f);
     }
 
     if (program == nullptr)
@@ -98,20 +283,30 @@ void ScriptEngine::processBlock (juce::AudioBuffer<float>& buffer, const std::ar
     ctx.sr = (float) currentSampleRate;
     ctx.macros = &safeMacros;
     ctx.persistentState = &persistentState;
-    if (program) ctx.functionRegistry = &program->program.functionRegistry;
+    ctx.functionRegistry = &program->program.functionRegistry;
 
     for (int s = 0; s < numSamples; ++s)
     {
-        ctx.t    = (float) sampleCounter / (float) currentSampleRate;
-        ctx.inL  = numChannels > 0 ? buffer.getSample (0, s) : 0.0f;
-        ctx.inR  = numChannels > 1 ? buffer.getSample (1, s) : ctx.inL;
-        ctx.outL = 0.0f;
-        ctx.outR = 0.0f;
+        ctx.t = (float) sampleCounter / (float) currentSampleRate;
+        ctx.inL = numChannels > 0 ? buffer.getSample (0, s) : 0.0f;
+        ctx.inR = numChannels > 1 ? buffer.getSample (1, s) : ctx.inL;
+        ctx.outL = ctx.inL;
+        ctx.outR = ctx.inR;
         ctx.locals.clear();
+        ctx.executionAborted = false;
+        ctx.returnTriggered = false;
+        ctx.returnValue = 0.0f;
+        ctx.loopDepth = 0;
+        ctx.recursionDepth = 0;
+        ctx.instructionCount = 0;
+        ctx.maxInstructions = kMaxInstructionsPerSample;
 
         for (const auto& stmt : program->program.statements)
         {
-            if (stmt) stmt->execute(ctx);
+            if (stmt != nullptr)
+                stmt->execute (ctx);
+            if (ctx.executionAborted || ctx.returnTriggered)
+                break;
         }
 
         enforcePersistentStateLimit();
@@ -145,9 +340,9 @@ juce::StringArray exampleNames()
         "Low-pass morph",
         "Wavefold shimmer",
         "Stereo bit crush drift",
-    "Noisy transient gate",
-    "Rhythmic pulse gate",
-    "Envelope duck tremor"
+        "Noisy transient gate",
+        "Rhythmic pulse gate",
+        "Envelope duck tremor"
     };
 }
 
