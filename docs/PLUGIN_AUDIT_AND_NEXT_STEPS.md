@@ -41,6 +41,7 @@ This document audits the current `audio_scripter` codebase and proposes a concre
    - Built-ins are now registered from a centralized registry implementation.
    - User-defined function calls (`fn` + `return`) now execute with recursion and execution safety guards.
 
+
 4. **Quality gates are incomplete for realtime DSP confidence**
    - Current script validator is static and useful, but there are no unit tests for tokenizer/parser semantics, no deterministic DSP golden tests, and no CI matrix for plugin build targets.
 
