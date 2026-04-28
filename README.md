@@ -1,189 +1,130 @@
-# audio_scripter 1.0.7
+# audio_scripter 1.0.8
 
-`audio_scripter` is a JUCE-based real-time scriptable audio effect plugin for **VST3**, **AU**, and **Standalone**.
+audio_scripter is a JUCE-based, real-time scriptable audio effect plugin (VST3, AU, Standalone).
 
-It is designed for Ableton Live and other DAWs where users need fast, expressive experimentation beyond fixed-effect plugins.
+Status: Release v1.0.8 — GitHub release: https://github.com/krahd/audio_scripter/releases/tag/v1.0.8
 
-## 1.0 highlights
+## Highlights
 
-- Script language for per-sample DSP with arithmetic, function calls, and persistent state.
-- Lock-free script swap architecture (atomic compiled program snapshots).
-- 8 DAW-automatable macro controls (`p1..p8`) available inside scripts.
-- Script editor GUI with save/load, examples, compile diagnostics, and inline language help.
-- Extended DSP primitives for creative effects: `fold`, `clip`, `crush`, `lpf1`, `slew`, `mix`, `wrap`, `tanh`, etc.
-- Offline-friendly build option using a local JUCE checkout.
+- Script language for per-sample DSP with arithmetic, functions, and persistent state.
+- Lock-free script swap architecture for zero-copy updates at runtime.
+- DAW-automatable macro controls `p1..p8` mapped to plugin parameters.
+- Cross-format builds: VST3, AU, Standalone (macOS), Windows VST3 & Standalone supported in CI.
 
-## Build
-
-### Requirements
+## Build requirements
 
 - CMake 3.22+
-- C++20 compiler
-- JUCE-compatible build toolchain for your platform/plugin formats
+- A C++20 compiler (Clang or recent GCC on Linux/Windows)
+- JUCE (optional local checkout) — can use FetchContent to download JUCE during configure
 
-### Configure & build
+## Quick build & package (recommended)
 
-Using local JUCE path (recommended for restricted environments):
-
-```bash
-cmake -S . -B build -DAUDIO_SCRIPTER_JUCE_PATH=/path/to/JUCE
-cmake --build build --config Release
-```
-
-Using FetchContent (if GitHub access is available):
+From the repository root:
 
 ```bash
-cmake -S . -B build
-cmake --build build --config Release
+# Build release and package binaries (VST3/AU/Standalone)
+./scripts/build_release.sh --config Release --package
+
+# Build and run validator/parser tests
+./scripts/build_release.sh --config Release --tests
 ```
 
-## Script language quick guide
-
-Each line is a statement:
-
-```text
-variable = expression;
-```
-
-### Built-in inputs
-
-- `inL`, `inR`: input samples
-- `sr`: sample rate
-- `t`: playback time (seconds)
-- `p1..p8`: macro controls (0..1, DAW-automatable)
-
-### Outputs
-
-- `outL`, `outR`
-
-### Functions
-
-- Math: `sin`, `cos`, `tan`, `abs`, `sqrt`, `exp`, `log`, `tanh`, `pow`, `min`, `max`
-# audio_scripter 1.0.6
-
-`audio_scripter` is a JUCE-based real-time scriptable audio effect plugin for **VST3**, **AU**, and **Standalone**.
-
-It is designed for Ableton Live and other DAWs where users need fast, expressive experimentation beyond fixed-effect plugins.
-
-## 1.0 highlights
-
-- Script language for per-sample DSP with arithmetic, function calls, and persistent state.
-- Lock-free script swap architecture (atomic compiled program snapshots).
-- 8 DAW-automatable macro controls (`p1..p8`) available inside scripts.
-- Script editor GUI with save/load, examples, compile diagnostics, and inline language help.
-- Extended DSP primitives for creative effects: `fold`, `clip`, `crush`, `lpf1`, `slew`, `mix`, `wrap`, `tanh`, `pow`, `min`, `max`
-- Offline-friendly build option using a local JUCE checkout.
-
-## Build
-
-### Requirements
-
-- CMake 3.22+
-- C++20 compiler
-- JUCE-compatible build toolchain for your platform/plugin formats
-
-### Configure & build
-
-Using local JUCE path (recommended for restricted environments):
+If you have a local JUCE checkout and want to use it:
 
 ```bash
-cmake -S . -B build -DAUDIO_SCRIPTER_JUCE_PATH=/path/to/JUCE
-cmake --build build --config Release
+./scripts/build_release.sh --juce-path /path/to/JUCE --config Release --package
 ```
 
-Using FetchContent (if GitHub access is available):
+## Install plugin (macOS)
+
+- Install into the current user's audio plugin folders, creating a timestamped backup of any existing bundle:
 
 ```bash
-cmake -S . -B build
-cmake --build build --config Release
+./install.sh -b
 ```
 
-## Script language quick guide
+- Install system-wide (requires root) and create a backup:
 
-Each line is a statement:
-
-```text
-variable = expression;
+```bash
+sudo ./install.sh --system -b
 ```
 
-### Built-in inputs
+- Convenience script (build, install, quit Ableton, open test Project):
 
-- `inL`, `inR`: input samples
-- `sr`: sample rate
-- `t`: playback time (seconds)
-- `p1..p8`: macro controls (0..1, DAW-automatable)
+```bash
+./scripts/build_and_open_als.sh
+```
 
-### Outputs
+## VS Code
 
-- `outL`, `outR`
+- There are useful tasks in `.vscode/tasks.json`, including:
+  - `Build Release + Install VST3` — builds Release and installs the plugin (backs up existing bundle)
 
-### Functions
+## Tests & validation
 
-- Math: `sin`, `cos`, `tan`, `abs`, `sqrt`, `exp`, `log`, `tanh`, `pow`, `min`, `max`
-- Utility: `clamp`, `clip`, `mix`, `wrap`
-- Creative DSP: `fold`, `crush`, `smoothstep(edge0, edge1, x)`, `noise(seed)`, `gt(a, b)`, `lt(a, b)`, `ge(a, b)`, `le(a, b)`, `select(cond, a, b)`, `pulse(freqHz, duty)`, `env(x, attack, release [, id])`, `lpf1(x, coeff [, id])`, `slew(target, speed [, id])`
-
-### State model
-
-- Variables prefixed with `state_` persist sample-to-sample.
-- `lpf1` and `slew` optional `id` isolates internal state lanes.
-
-## Examples
-
-Scripts in `examples/` and GUI dropdown include:
-
-- transparent soft clip
-- cross-feedback distortion
-- time-ramp ring modulation
-- low-pass morph
-- wavefold shimmer
-- stereo bit-crush drift
-- noisy transient gate
-- rhythmic pulse gate
-- envelope duck tremor
-
-
-## Local checks
-
-## Screenshots
-
-Below are placeholder screenshots. Replace these with real captures from the editor and plugin UI.
-
-![Editor screenshot](docs/screenshots/editor.svg)
-
-![Plugin UI screenshot](docs/screenshots/plugin.svg)
-
+- Validate example scripts:
 
 ```bash
 python3 tools/validate_scripts.py
 ```
 
-Parser test target (after CMake configure):
+- Parser unit tests (after CMake configure):
 
 ```bash
 cmake --build build --target audio_scripter_parser_tests
 ctest --test-dir build --output-on-failure
 ```
 
-## Automated plugin releases
+## CI and releases
 
-This repository includes a GitHub Actions workflow at `.github/workflows/release.yml` that builds plugin binaries and attaches them to a GitHub Release when you push a version tag (for example `v1.0.6`).
+- A CI workflow (`.github/workflows/ci.yml`) runs the script validator and parser tests on push/PR.
+- A release workflow (`.github/workflows/release.yml`) builds macOS/Windows artifacts and publishes a GitHub Release when you push a tag `v*` (e.g. `v1.0.8`).
 
-Release assets produced:
-- macOS: VST3, AU, Standalone app (zip)
-- Windows: VST3, Standalone exe (zip)
-
-Create a release with downloadable binaries:
+To create a release from your machine:
 
 ```bash
-git tag v1.0.6
-git push origin v1.0.6
+git tag v1.0.8
+git push origin v1.0.8
+# The release workflow will build and publish artifacts automatically.
 ```
 
-You can also run the same pipeline manually from the **Actions** tab using `workflow_dispatch`.
+NOTE: The CI release currently packages artifacts but does not perform Apple codesigning/notarization — see Notes below.
 
-## Release docs
+## Signing & notarization (summary)
 
-- Language spec: `docs/LANGUAGE_SPEC.md`
-- Changelog: `docs/CHANGELOG.md`
-- Roadmap after 1.0: `docs/ROADMAP.md`
+- For macOS distribution you should codesign and notarize binaries. High-level steps:
+  1. Obtain Apple Developer ID Application and Developer ID Installer certs and an App Store Connect API key.
+ 2. Import certs into a keychain on your build machine or CI runner and set key partition list for `codesign`.
+ 3. Sign embedded frameworks/dylibs, then the main executable(s), then the plugin bundle(s).
+ 4. Package as zip/pkg and submit to Apple notarization (`xcrun notarytool` recommended).
+ 5. Staple the notarization ticket (`xcrun stapler staple`).
+
+See `docs/PLUGIN_AUDIT_AND_NEXT_STEPS.md` for a prioritized release-engineering checklist and suggested automation
+steps for CI.
+
+## Examples
+
+- Scripts live in the `examples/` directory. Use `tools/validate_scripts.py` to check example compatibility.
+
+## Changelog
+
+- See [docs/CHANGELOG.md](docs/CHANGELOG.md) for the release history. This repo has just been bumped to `1.0.8`.
+
+## Important notes & known gaps
+
+- No LICENSE file is present in the repository. Please add a `LICENSE` (e.g. MIT, Apache-2.0) to make reuse terms clear.
+- The codebase contains an internal audit in `docs/PLUGIN_AUDIT_AND_NEXT_STEPS.md` describing parser/runtime hygiene and recommended
+  work to reach a fully-featured, test-backed release. Read it before making large language/runtime refactors.
+
+## Contributing
+
+- Open issues and PRs against `main`. The CI will run validator and parser tests on PRs.
+
+---
+
+Files of interest:
+
+- [Build script](scripts/build_release.sh)
+- [Install helper](install.sh)
+- [Release workflow](.github/workflows/release.yml)
+- [Audit & next steps](docs/PLUGIN_AUDIT_AND_NEXT_STEPS.md)
