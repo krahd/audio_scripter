@@ -28,6 +28,8 @@ enum class TokenType
     kw_for,
     kw_fn,
     kw_return,
+    kw_break,
+    kw_continue,
     kw_true,
     kw_false,
     // End of input

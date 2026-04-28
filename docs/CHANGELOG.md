@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.1.0 - 2026-04-28
+
+### Added
+- New DSP primitives: `hp1`, `bp1`, `svf`, `delay`, and `sat`.
+- Extended loop control: `for (i = start; condition; step) { ... }` plus `break;` and `continue;`.
+- New examples using the new primitives: `svf_morph_sweeper`, `micro_delay_widen`; plus updated `iter_fold` and `highpass_filter`.
+- Validator heuristics that warn about always-on noise and unsmoothed narrow pulse gates.
+
+### Changed
+- Bump project version to `1.1.0` and sync docs.
+
+## 1.0.9 - 2026-04-28
+
+### Changed
+- Refresh core example presets to reduce static-like artifacts and make effects more distinct across the library.
+- Improve rhythm/gate/mod examples with smoother transitions (`slew`) and more musical modulation blends.
+- Improve noise/crush examples by reducing always-on full-band noise and adding tonal smoothing/wet staging.
+- Bump project version to `1.0.9` and align README release/version references.
+
 ## 1.0.8 - 2026-04-28
 
 ### Added

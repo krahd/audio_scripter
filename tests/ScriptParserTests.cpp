@@ -38,6 +38,31 @@ outR = inR;
     {
         scripting::ScriptParser parser;
         const auto result = parser.parse (R"(
+sum = 0.0;
+for (i = 0.0; lt(i, 8.0); 1.0) {
+    if (lt(i, 2.0)) {
+        continue;
+    }
+    if (gt(i, 5.0)) {
+        break;
+    }
+    sum = sum + i;
+}
+outL = sum * 0.1;
+outR = outL;
+)");
+
+        if (! result.errors.isEmpty())
+        {
+            std::cerr << "Expected extended for-loop script to parse successfully.\n";
+            std::cerr << result.errors.joinIntoString ("\n") << "\n";
+            return 1;
+        }
+    }
+
+    {
+        scripting::ScriptParser parser;
+        const auto result = parser.parse (R"(
 fn ident(x) {
     return x;
 }

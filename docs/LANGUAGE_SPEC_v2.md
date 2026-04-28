@@ -1,47 +1,56 @@
-# audio_scripter language specification (v2.0)
+# audio_scripter language specification (v2.2)
+
+This document reflects the currently implemented parser/runtime behavior.
 
 ## Grammar
 
-- Program = zero or more statements
-- Statement = assignment, block, if, while, for, function definition, return, expression statement
-- Assignment: `identifier '=' expression ';'`
-- Block: `{ ... }`
-- If: `if (condition) { ... } [else { ... }]`
-- While: `while (condition) { ... }`
-- For: `for (init; cond; step) { ... }`
-- Function definition: `fn name(args) { ... }`
-- Return: `return expression;`
-- Expression statement: `expression;`
-- Expressions support precedence: unary, `* /`, then `+ -`
-- Function call: `identifier '(' [expression (',' expression)*] ')'
+- Program: zero or more statements.
+- Statement kinds:
+  - assignment: `identifier = expression;`
+  - block: `{ ... }`
+  - if/else: `if (condition) statement [else statement]`
+  - while: `while (condition) statement`
+  - for (legacy): `for (i = start; end) statement`
+  - for (extended): `for (i = start; condition; step) statement`
+  - function definition: `fn name(arg1, arg2, ...) { ... }`
+  - return: `return expression;`
+  - break: `break;`
+  - continue: `continue;`
+  - expression statement: `funcCall(...);`
+- Expressions support:
+  - unary minus: `-x`
+  - binary arithmetic: `*`, `/`, `+`, `-`
+  - parentheses
+  - numeric literals, variable reads, function calls
 
-## Types
+## Important semantics
 
-- `float`, `int`, `bool` (automatic type inference for literals)
-- Variables are dynamically typed, but type errors are reported at runtime
-
-## Program constraints
-
-- Maximum 256 statements per script.
-- Empty scripts are rejected.
-
-## Runtime semantics
-
-- Script executes top-to-bottom once per sample.
-- Defaults at sample start:
+- Script executes once per sample, top-to-bottom.
+- At sample start runtime defaults are:
   - `outL = inL`
   - `outR = inR`
-- Read-only values:
-  - `inL`, `inR`, `sr`, `t`, `p1..p8`
+- Read-only runtime values: `inL`, `inR`, `sr`, `t`.
+- Macro values: `p1..p8` (typically 0..1).
 - Variables prefixed `state_` persist across samples.
+- Non-`state_` variables are local to the current sample evaluation.
+- Division by values near zero returns `0.0`.
 
-## Operators
+## Control flow safety limits
 
-- `+`, `-`, `*`, `/`, `%`, `==`, `!=`, `<`, `>`, `<=`, `>=`, `&&`, `||`, `!`
-- unary `-`, `!`
-- parentheses
+- Max top-level statements per script: 256.
+- Runtime instruction budget per sample is enforced.
+- Max loop depth and recursion depth are enforced; overflow aborts execution for that sample.
 
-## Functions
+## For-loop behavior
+
+- Legacy form: `for (i = start; end)` means `i` increments by `1.0` and loop runs while `i < end`.
+- Extended form: `for (i = start; condition; step)` where:
+  - `condition` is re-evaluated every iteration with current `i`
+  - `step` is evaluated every iteration and added to `i`
+- `break;` exits the innermost loop.
+- `continue;` skips to the next iteration of the innermost loop.
+
+## Built-in functions
 
 ### Math
 - `sin(x)`, `cos(x)`, `tan(x)`, `abs(x)`, `sqrt(x)`, `exp(x)`, `log(x)`, `tanh(x)`
@@ -49,52 +58,31 @@
 
 ### Utility
 - `clamp(x, lo, hi)`
-- `clip(x, lo, hi)`
+- `clip(x, lo, hi)` (alias of `clamp`)
 - `mix(a, b, amount)`
 - `wrap(x, lo, hi)`
-
-### DSP/creative
-- `fold(x, lo, hi)`
-- `crush(x, steps)`
 - `smoothstep(edge0, edge1, x)`
 - `noise(seed)`
-- `lpf1(x, coeff [, id])`
-- `slew(target, speed [, id])`
-- `gt(a, b)`, `lt(a, b)`, `ge(a, b)`, `le(a, b)`
-- `select(cond, a, b)`
+
+### DSP/control primitives
+- `fold(x, lo, hi)`
+- `crush(x, steps)`
 - `pulse(freqHz, duty)`
+- `lpf1(x, coeff [, id])`
+- `hp1(x, coeff [, id])`
+- `bp1(x, hpCoeff, lpCoeff [, id])`
+- `svf(x, cutoff, q, mode [, id])` where `mode`: `0=LP`, `1=BP`, `2=HP`
+- `slew(target, speed [, id])`
 - `env(x, attack, release [, id])`
+- `delay(x, samples [, id])`
+- `sat(x, drive [, mode])` where `mode`: `0=tanh`, `1=atan`, `2=cubic`
 
-### User-defined functions
-- `fn myFunc(a, b) { ... return ...; }`
-- Call with `myFunc(1, 2)`
-- Supports recursion and local variables
+### Comparators/selection
+- `gt(a, b)`, `lt(a, b)`, `ge(a, b)`, `le(a, b)` return `1.0`/`0.0`
+- `select(cond, a, b)`
 
-## Error handling
+## Notes for effect design
 
-- Parser errors include line numbers and token context
-- Unknown function or wrong arity fails compile
-- Type errors (e.g., using bool as float) are reported at runtime
-- Divide-by-zero evaluates to `0.0`
-
-## Examples
-
-### Simple function
-fn gain(x, amount) {
-    return x * amount;
-}
-outL = gain(inL, 0.5);
-outR = gain(inR, 0.5);
-
-### If/else
-if (t < 1.0) {
-    outL = inL;
-} else {
-    outL = 0.0;
-}
-
-### While loop
-n = 0;
-while (n < 10) {
-    n = n + 1;
-}
+- For cleaner sound, avoid hard discontinuities when possible; combine `slew(...)` and `lpf1(...)` around stepped/gated/noise-heavy signals.
+- For transient/noise effects, event-triggered bursts generally sound less static-like than always-on full-rate pseudo-noise.
+- Prefer explicit wet staging (`mix`) after destructive blocks (`crush`, aggressive `sat`, deep feedback).
