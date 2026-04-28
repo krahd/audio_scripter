@@ -1,3 +1,9 @@
+#@p1: Macro1
+#@p2: Macro2
+#@p3: Macro3
+# p1 = 0.65
+# p2 = 0.5
+# p3 = 0.8
 # Harmonic exciter: adds even harmonics via full-wave rectification of the high band
 # Adds air and presence without heavy distortion
 # p1 = excite amount, p2 = frequency threshold (low=all freq, high=highs only), p3 = dry/wet

@@ -19,6 +19,8 @@ private:
     void comboBoxChanged (juce::ComboBox*) override;
 
     void applyScript();
+    void applyScriptMetadata();
+    void applyMacroLabelsFromText (const juce::String& text);
     void saveScriptToFile();
     void loadScriptFromFile();
 

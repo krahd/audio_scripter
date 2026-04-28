@@ -1,3 +1,7 @@
+#@p1: Macro1
+#@p2: Macro2
+# p1 = 0.65
+# p2 = 0.5
 # Sample rate reducer: holds each sample for N steps, creating staircase lo-fi texture
 # Distinct from bitcrusher — reduces sample rate, not bit depth
 # p1 = reduction (1–32x), p2 = dry/wet

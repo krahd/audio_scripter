@@ -1,3 +1,9 @@
+#@p1: Macro1
+#@p2: Macro2
+#@p3: Macro3
+# p1 = 0.65
+# p2 = 0.5
+# p3 = 0.8
 # Noise gate with hysteresis: separate open/close thresholds prevent chattering
 # p1 = open threshold, p2 = hysteresis depth, p3 = gate speed
 open_thr = 0.02 + p1 * 0.48;

@@ -1,7 +1,19 @@
-envL = abs(inL);
-envR = abs(inR);
-gL = smoothstep(0.02, 0.25, envL);
-gR = smoothstep(0.02, 0.25, envR);
-n = noise(3.0 + p2 * 20.0) * (0.02 + p1 * 0.25);
-outL = inL + n * gL;
-outR = inR + n * gR;
+#@p1: Burst
+#@p2: Gate
+#@p3: Color
+# p1 = 0.76
+# p2 = 0.5
+# p3 = 0.7
+# Transient burst enhancer with noise color and gated sustain
+ampL = env(abs(inL), 0.01, 0.2, 0);
+ampR = env(abs(inR), 0.01, 0.2, 1);
+edgeL = clamp(abs(inL) - ampL, 0.0, 1.0);
+edgeR = clamp(abs(inR) - ampR, 0.0, 1.0);
+gateL = smoothstep(0.01 + p2 * 0.06, 0.2 + p2 * 0.4, edgeL);
+gateR = smoothstep(0.01 + p2 * 0.06, 0.2 + p2 * 0.4, edgeR);
+noiseL = noise(t * sr * (1.0 + p3 * 4.0));
+noiseR = noise(t * sr * (1.3 + p3 * 4.5));
+burstL = inL + noiseL * gateL * p1 * 0.7;
+burstR = inR + noiseR * gateR * p1 * 0.7;
+outL = tanh(burstL);
+outR = tanh(burstR);

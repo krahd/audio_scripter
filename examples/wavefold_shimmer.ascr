@@ -1,4 +1,17 @@
-preL = inL * 5.0;
-preR = inR * 5.0;
-outL = tanh(fold(preL, -0.7, 0.7)) * 0.8;
-outR = tanh(fold(preR, -0.7, 0.7)) * 0.8;
+#@p1: Drive
+#@p2: Sparkle
+#@p3: Wet
+# p1 = 0.68
+# p2 = 0.62
+# p3 = 0.9
+# Harmonic shimmer: wavefold + rectified high band reinjection
+preL = inL * (1.0 + p1 * 10.0);
+preR = inR * (1.0 + p1 * 10.0);
+foldedL = fold(preL, -0.65, 0.65);
+foldedR = fold(preR, -0.65, 0.65);
+hiL = foldedL - lpf1(foldedL, 0.07, 0);
+hiR = foldedR - lpf1(foldedR, 0.07, 1);
+shimmerL = foldedL + abs(hiL) * p2 * 0.8;
+shimmerR = foldedR + abs(hiR) * p2 * 0.8;
+outL = mix(inL, tanh(shimmerL), p3);
+outR = mix(inR, tanh(shimmerR), p3);

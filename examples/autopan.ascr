@@ -1,3 +1,9 @@
+#@p1: Macro1
+#@p2: Macro2
+#@p3: Macro3
+# p1 = 0.65
+# p2 = 0.5
+# p3 = 0.8
 # Auto-pan: sine LFO sweeps audio between left and right channels
 # p1 = pan rate (0.2–5 Hz), p2 = pan depth, p3 = dry/wet
 rate = 0.2 + p1 * 4.8;

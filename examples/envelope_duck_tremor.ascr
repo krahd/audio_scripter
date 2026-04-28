@@ -1,7 +1,23 @@
-envL = env(inL, 0.25, 0.01, 0);
-envR = env(inR, 0.25, 0.01, 1);
-mod = 0.5 + 0.5 * pulse(2.0 + p1 * 8.0, 0.5);
-depthL = clamp((1.0 - envL * (0.7 + p2)), 0.2, 1.0);
-depthR = clamp((1.0 - envR * (0.7 + p2)), 0.2, 1.0);
-outL = inL * mix(depthL, 1.0, mod);
-outR = inR * mix(depthR, 1.0, mod);
+#@p1: Rate
+#@p2: Duck
+#@p3: Wet
+# p1 = 0.53
+# p2 = 0.55
+# p3 = 0.82
+# Envelope-ducked tremolo with smooth sine/pulse hybrid movement
+fn trem(rate, shape) {
+    s = 0.5 + 0.5 * sin(6.2831853 * rate * t);
+    p = pulse(rate, 0.5);
+    return mix(s, p, shape);
+}
+
+envL = env(inL, 0.015, 0.08, 0);
+envR = env(inR, 0.015, 0.08, 1);
+rate = 1.0 + p1 * 11.0;
+mod = trem(rate, 0.35 + p2 * 0.45);
+depthL = clamp(1.0 - envL * (0.8 + p2 * 0.7), 0.12, 1.0);
+depthR = clamp(1.0 - envR * (0.8 + p2 * 0.7), 0.12, 1.0);
+wetL = inL * mix(depthL, 1.0, mod);
+wetR = inR * mix(depthR, 1.0, mod);
+outL = mix(inL, wetL, p3);
+outR = mix(inR, wetR, p3);

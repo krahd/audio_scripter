@@ -1,4 +1,19 @@
-xL = tanh(inL * 3.0 + inR * 1.7);
-xR = tanh(inR * 3.0 + inL * 1.7);
-outL = xL * 0.8;
-outR = xR * 0.8;
+#@p1: Feedback
+#@p2: Tone
+#@p3: Wet
+# p1 = 0.66
+# p2 = 0.54
+# p3 = 0.88
+# Cross-channel nonlinear feedback with controllable brightness
+fb = p1 * 0.93;
+coeff = 0.01 + p2 * 0.24;
+feedL = inL + state_fbR * fb;
+feedR = inR + state_fbL * fb;
+shapeL = tanh(feedL * (2.0 + p1 * 6.0));
+shapeR = tanh(feedR * (2.0 + p1 * 6.0));
+fltL = lpf1(shapeL, coeff, 0);
+fltR = lpf1(shapeR, coeff, 1);
+state_fbL = fltL;
+state_fbR = fltR;
+outL = mix(inL, fltL * 0.9, p3);
+outR = mix(inR, fltR * 0.9, p3);

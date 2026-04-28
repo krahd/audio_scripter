@@ -255,7 +255,7 @@ void ScriptEngine::enforcePersistentStateLimit()
         persistentState.erase (persistentState.begin());
 }
 
-void ScriptEngine::processBlock (juce::AudioBuffer<float>& buffer, const std::array<float, 8>& macros)
+void ScriptEngine::processBlock (juce::AudioBuffer<float>& buffer, std::array<float, 8>& macros)
 {
     if (stateResetRequested.exchange (false))
     {
@@ -267,12 +267,11 @@ void ScriptEngine::processBlock (juce::AudioBuffer<float>& buffer, const std::ar
     const int numChannels = buffer.getNumChannels();
     const int numSamples = buffer.getNumSamples();
 
-    std::array<float, 8> safeMacros;
     for (size_t i = 0; i < 8; ++i)
     {
         float v = macros[i];
         if (! std::isfinite (v)) v = 0.0f;
-        safeMacros[i] = clampf (v, 0.0f, 1.0f);
+        macros[i] = clampf (v, 0.0f, 1.0f);
     }
 
     if (program == nullptr)
@@ -283,7 +282,7 @@ void ScriptEngine::processBlock (juce::AudioBuffer<float>& buffer, const std::ar
 
     EvalContext ctx;
     ctx.sr = (float) currentSampleRate;
-    ctx.macros = &safeMacros;
+    ctx.macros = &macros;
     ctx.persistentState = &persistentState;
     ctx.functionRegistry = &program->program.functionRegistry;
 

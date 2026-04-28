@@ -152,6 +152,37 @@ static void applyMacroInitialValuesFromText (AudioScripterAudioProcessor& proces
     catch (...) {}
 }
 
+static std::array<juce::String, 8> parseMacroLabelsFromText (const juce::String& text)
+{
+    std::array<juce::String, 8> labels;
+    for (int i = 0; i < 8; ++i)
+        labels[(size_t) i] = "p" + juce::String (i + 1);
+
+    try
+    {
+        const std::string source = text.toStdString();
+        std::regex re ("^\\s*#\\s*@p([1-8])\\s*[:=]\\s*(.*?)\\s*$", std::regex::icase);
+        std::smatch m;
+        std::stringstream lines (source);
+        std::string line;
+
+        while (std::getline (lines, line))
+        {
+            if (! std::regex_match (line, m, re))
+                continue;
+
+            const int idx = m[1].str()[0] - '1';
+            auto label = juce::String (m[2].str()).trim();
+            if (idx < 0 || idx >= 8 || label.isEmpty())
+                continue;
+            labels[(size_t) idx] = label;
+        }
+    }
+    catch (...) {}
+
+    return labels;
+}
+
 
 AudioScripterAudioProcessorEditor::AudioScripterAudioProcessorEditor (AudioScripterAudioProcessor& p)
     : AudioProcessorEditor (&p), processor (p)
@@ -302,9 +333,7 @@ AudioScripterAudioProcessorEditor::AudioScripterAudioProcessorEditor (AudioScrip
     helpDocument.replaceAllContent (fixCp1252Mojibake (scripting::helpText()));
     addAndMakeVisible (*helpPanel);
 
-        // Apply initial macro parameter values from the currently loaded script text
-        if (scriptEditor)
-            applyMacroInitialValuesFromText (processor, scriptEditor->getDocument().getAllContent());
+    applyScriptMetadata();
 
     // setSize must come after all child components are created so that the
     // first resized() call can lay them out correctly.
@@ -397,20 +426,25 @@ void AudioScripterAudioProcessorEditor::comboBoxChanged (juce::ComboBox* box)
     {
         const auto file = exampleFiles[(size_t) idx];
         if (file.existsAsFile())
+        {
             scriptEditor->loadContent (loadTextFileFixEncoding (file));
-            applyMacroInitialValuesFromText (processor, scriptEditor->getDocument().getAllContent());
+            applyScriptMetadata();
+        }
         return;
     }
 
     // Fallback to built-in indexed examples (if available).
     const auto fallbackIdx = idx - (int) exampleFiles.size();
     if (fallbackIdx >= 0)
+    {
         scriptEditor->loadContent (scripting::exampleScript (fallbackIdx));
-        applyMacroInitialValuesFromText (processor, scriptEditor->getDocument().getAllContent());
+        applyScriptMetadata();
+    }
 }
 
 void AudioScripterAudioProcessorEditor::applyScript()
 {
+    applyScriptMetadata();
     const auto result = processor.setScript (scriptEditor->getDocument().getAllContent());
 
     if (result.ok)
@@ -422,6 +456,23 @@ void AudioScripterAudioProcessorEditor::applyScript()
 
     outputPanel.setColour (juce::TextEditor::textColourId, juce::Colours::orange);
     outputPanel.setText (result.errors.joinIntoString ("\n"));
+}
+
+void AudioScripterAudioProcessorEditor::applyScriptMetadata()
+{
+    if (scriptEditor == nullptr)
+        return;
+
+    const auto text = scriptEditor->getDocument().getAllContent();
+    applyMacroInitialValuesFromText (processor, text);
+    applyMacroLabelsFromText (text);
+}
+
+void AudioScripterAudioProcessorEditor::applyMacroLabelsFromText (const juce::String& text)
+{
+    const auto labels = parseMacroLabelsFromText (text);
+    for (int i = 0; i < 8; ++i)
+        macroLabels[(size_t) i].setText (labels[(size_t) i], juce::dontSendNotification);
 }
 
 void AudioScripterAudioProcessorEditor::saveScriptToFile()
@@ -474,10 +525,9 @@ void AudioScripterAudioProcessorEditor::loadScriptFromFile()
             {
                 if (scriptEditor)
                     scriptEditor->loadContent (text);
+                applyScriptMetadata();
                 outputPanel.setColour (juce::TextEditor::textColourId, juce::Colours::lightgreen);
                 outputPanel.setText ("Loaded: " + file.getFullPathName());
-                if (scriptEditor)
-                    applyMacroInitialValuesFromText (processor, scriptEditor->getDocument().getAllContent());
             });
         });
 }

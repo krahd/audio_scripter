@@ -1,3 +1,11 @@
+#@p1: Macro1
+#@p2: Macro2
+#@p3: Macro3
+#@p4: Macro4
+# p1 = 0.65
+# p2 = 0.5
+# p3 = 0.8
+# p4 = 0.5
 # Soft-knee compressor: exponential gain reduction with smoothstep knee shaping
 # p1 = threshold, p2 = ratio, p3 = attack, p4 = release
 fn gainReduction(amp, thr, ratio) {

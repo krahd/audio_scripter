@@ -1,3 +1,11 @@
+#@p1: Macro1
+#@p2: Macro2
+#@p3: Macro3
+#@p4: Macro4
+# p1 = 0.65
+# p2 = 0.5
+# p3 = 0.8
+# p4 = 0.5
 # Autowah: envelope follower drives low-pass filter cutoff for wah-like sweep
 # p1 = envelope sensitivity, p2 = base cutoff, p3 = resonance feedback, p4 = release
 fn envToCoeff(amp) {

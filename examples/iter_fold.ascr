@@ -1,3 +1,9 @@
+#@p1: Macro1
+#@p2: Macro2
+#@p3: Macro3
+# p1 = 0.65
+# p2 = 0.5
+# p3 = 0.8
 # Iterative wavefold: a while loop applies multiple fold passes for dense harmonics
 # p1 = pre-fold drive, p2 = fold iterations (1–8), p3 = dry/wet
 fn iterFold(x, drv, iters) {
