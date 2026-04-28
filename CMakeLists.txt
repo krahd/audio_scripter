@@ -78,6 +78,10 @@ if (AUDIO_SCRIPTER_BUILD_TESTS)
 
   target_include_directories(audio_scripter_parser_tests PRIVATE Source)
 
+  target_compile_definitions(audio_scripter_parser_tests PRIVATE
+    JUCE_WEB_BROWSER=0
+    JUCE_USE_CURL=0)
+
   target_link_libraries(audio_scripter_parser_tests PRIVATE
     juce::juce_core
     juce::juce_recommended_config_flags
