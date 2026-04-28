@@ -197,7 +197,7 @@ AudioScripterAudioProcessorEditor::AudioScripterAudioProcessorEditor (AudioScrip
     addAndMakeVisible (titleLabel);
 
     // Create tokeniser + code editor with syntax colouring and line numbers
-    codeTokeniser = std::make_unique<juce::CPlusPlusCodeTokeniser>();
+    codeTokeniser = std::make_unique<ScriptCodeTokeniser>();
     scriptEditor = std::make_unique<juce::CodeEditorComponent> (codeDocument, codeTokeniser.get());
     // Use a consistent font with fallback enabled and a 1.25 line-spacing factor.
     const float baseEditorFontHeight = 13.0f;
@@ -214,22 +214,8 @@ AudioScripterAudioProcessorEditor::AudioScripterAudioProcessorEditor (AudioScrip
     scriptEditor->setColour (juce::CodeEditorComponent::lineNumberTextId,      juce::Colour (0xff858585));
     scriptEditor->setColour (juce::CodeEditorComponent::lineNumberBackgroundId, juce::Colour::fromRGB (30, 46, 50));
 
-    // VSCode Dark+ style colour scheme — all colours readable on dark backgrounds.
-    {
-        auto cs = codeTokeniser->getDefaultColourScheme();
-        cs.set ("Error",             juce::Colour (0xffff6b6b)); // bright red
-        cs.set ("Comment",           juce::Colour (0xff6a9955)); // muted green
-        cs.set ("Keyword",           juce::Colour (0xff569cd6)); // blue
-        cs.set ("Operator",          juce::Colour (0xffd4d4d4)); // light grey
-        cs.set ("Identifier",        juce::Colour (0xffd4d4d4)); // light grey
-        cs.set ("Integer",           juce::Colour (0xffb5cea8)); // light green
-        cs.set ("Float",             juce::Colour (0xffb5cea8)); // light green
-        cs.set ("String",            juce::Colour (0xffce9178)); // peach/orange
-        cs.set ("Bracket",           juce::Colour (0xffffd700)); // gold
-        cs.set ("Punctuation",       juce::Colour (0xffd4d4d4)); // light grey
-        cs.set ("Preprocessor Text", juce::Colour (0xff9cdcfe)); // light blue
-        scriptEditor->setColourScheme (cs);
-    }
+    // Script-aware colour scheme with full token coverage from ScriptCodeTokeniser.
+    scriptEditor->setColourScheme (codeTokeniser->getDefaultColourScheme());
     // initial content (fix encoding when loading from disk)
     scriptEditor->loadContent (processor.getScript());
     addAndMakeVisible (*scriptEditor);
@@ -315,21 +301,7 @@ AudioScripterAudioProcessorEditor::AudioScripterAudioProcessorEditor (AudioScrip
     helpPanel->setColour (juce::CodeEditorComponent::defaultTextColourId,   juce::Colour (0xffd4d4d4));
     helpPanel->setColour (juce::CodeEditorComponent::highlightColourId,     juce::Colour (0xff264f78));
     helpPanel->setColour (juce::CodeEditorComponent::lineNumberBackgroundId, juce::Colour::fromRGB (38, 56, 60));
-    {
-        auto cs = codeTokeniser->getDefaultColourScheme();
-        cs.set ("Error",             juce::Colour (0xffff6b6b));
-        cs.set ("Comment",           juce::Colour (0xff6a9955));
-        cs.set ("Keyword",           juce::Colour (0xff569cd6));
-        cs.set ("Operator",          juce::Colour (0xffd4d4d4));
-        cs.set ("Identifier",        juce::Colour (0xffd4d4d4));
-        cs.set ("Integer",           juce::Colour (0xffb5cea8));
-        cs.set ("Float",             juce::Colour (0xffb5cea8));
-        cs.set ("String",            juce::Colour (0xffce9178));
-        cs.set ("Bracket",           juce::Colour (0xffffd700));
-        cs.set ("Punctuation",       juce::Colour (0xffd4d4d4));
-        cs.set ("Preprocessor Text", juce::Colour (0xff9cdcfe));
-        helpPanel->setColourScheme (cs);
-    }
+    helpPanel->setColourScheme (codeTokeniser->getDefaultColourScheme());
     helpDocument.replaceAllContent (fixCp1252Mojibake (scripting::helpText()));
     addAndMakeVisible (*helpPanel);
 

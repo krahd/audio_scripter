@@ -44,7 +44,8 @@ if (AUDIO_SCRIPTER_BUILD_PLUGIN)
     Source/PluginEditor.cpp
     Source/ScriptEngine.cpp
     Source/ScriptParser.cpp
-    Source/ScriptTokenizer.cpp)
+    Source/ScriptTokenizer.cpp
+    Source/ScriptCodeTokeniser.cpp)
 
   target_include_directories(audio_scripter PRIVATE Source)
 

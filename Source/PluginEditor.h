@@ -2,6 +2,7 @@
 
 #include <JuceHeader.h>
 #include "PluginProcessor.h"
+#include "ScriptCodeTokeniser.h"
 
 class AudioScripterAudioProcessorEditor final : public juce::AudioProcessorEditor,
                                                 private juce::Button::Listener,
@@ -29,7 +30,7 @@ private:
     juce::Label titleLabel;
     juce::CodeDocument codeDocument;
     std::unique_ptr<juce::CodeEditorComponent> scriptEditor;
-    std::unique_ptr<juce::CPlusPlusCodeTokeniser> codeTokeniser;
+    std::unique_ptr<ScriptCodeTokeniser> codeTokeniser;
     juce::TextEditor outputPanel;
     juce::TextButton applyButton { "Apply" };
     juce::TextButton saveButton { "Save" };
