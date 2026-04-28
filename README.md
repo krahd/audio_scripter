@@ -1,15 +1,16 @@
-# audio_scripter 1.0.8
+# audio_scripter 1.1.0
 
 audio_scripter is a JUCE-based, real-time scriptable audio effect plugin (VST3, AU, Standalone).
 
-Status: Release v1.0.8 — GitHub release: https://github.com/krahd/audio_scripter/releases/tag/v1.0.8
+Status: Development build tracking v1.1.0 (next tag: `v1.1.0`).
 
 ## Highlights
 
-- Script language for per-sample DSP with arithmetic, functions, and persistent state.
+- Script language for per-sample DSP with arithmetic, functions, persistent state, and loop controls (`break` / `continue`).
 - Lock-free script swap architecture for zero-copy updates at runtime.
 - DAW-automatable macro controls `p1..p8` mapped to plugin parameters.
 - Cross-format builds: VST3, AU, Standalone (macOS), Windows VST3 & Standalone supported in CI.
+- Extended DSP primitives include: `hp1`, `bp1`, `svf`, `delay`, and `sat`.
 
 ## Build requirements
 
@@ -78,13 +79,13 @@ ctest --test-dir build --output-on-failure
 ## CI and releases
 
 - A CI workflow (`.github/workflows/ci.yml`) runs the script validator and parser tests on push/PR.
-- A release workflow (`.github/workflows/release.yml`) builds macOS/Windows artifacts and publishes a GitHub Release when you push a tag `v*` (e.g. `v1.0.8`).
+- A release workflow (`.github/workflows/release.yml`) builds macOS/Windows artifacts and publishes a GitHub Release when you push a tag `v*` (e.g. `v1.1.0`).
 
 To create a release from your machine:
 
 ```bash
-git tag v1.0.8
-git push origin v1.0.8
+git tag v1.1.0
+git push origin v1.1.0
 # The release workflow will build and publish artifacts automatically.
 ```
 
@@ -105,10 +106,13 @@ steps for CI.
 ## Examples
 
 - Scripts live in the `examples/` directory. Use `tools/validate_scripts.py` to check example compatibility.
+- The examples were refreshed to reduce harsh/static-like artifacts and improve variety (more smoothing, lower brittle full-band noise, and more wet/dry balancing in destructive effects).
+- If you are authoring new effects, prefer this pattern for cleaner sound: trigger events sparsely, smooth discontinuities with `slew`/`lpf1`, and avoid always-on full-rate `noise(...)` unless intentionally designing hiss.
+- New examples demonstrate the newer primitives and loop flow controls (`examples/svf_morph_sweeper.ascr`, `examples/micro_delay_widen.ascr`, `examples/iter_fold.ascr`).
 
 ## Changelog
 
-- See [docs/CHANGELOG.md](docs/CHANGELOG.md) for the release history. This repo has just been bumped to `1.0.8`.
+- See [docs/CHANGELOG.md](docs/CHANGELOG.md) for the release history. This repo is currently at `1.1.0`.
 
 ## Important notes & known gaps
 

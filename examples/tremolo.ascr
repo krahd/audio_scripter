@@ -1,15 +1,24 @@
 #@p1: Macro1
 #@p2: Macro2
 #@p3: Macro3
-# p1 = 0.65
-# p2 = 0.5
-# p3 = 0.8
-# Tremolo: LFO modulates volume from smooth sine waves to hard square-wave chops
-# p1 = rate (0.5–16 Hz), p2 = depth (0=off, 1=full cut), p3 = shape (0=sine, 1=square)
-rate = 0.5 + p1 * 15.5;
-sinLFO = 0.5 + 0.5 * sin(6.2831853 * rate * t);
-squareLFO = pulse(rate, 0.5);
-lfo = mix(sinLFO, squareLFO, p3);
-gain = 1.0 - p2 + lfo * p2;
-outL = inL * gain;
-outR = inR * gain;
+# p1 = 0.57
+# p2 = 0.52
+# p3 = 0.38
+# Musical tremolo: sine/square blend with slew-softened corners and slight stereo phase spread
+# p1 = rate (0.3–12 Hz), p2 = depth, p3 = shape (0=sine, 1=chop)
+rate = 0.3 + p1 * 11.7;
+phaseSpread = 0.18 + p3 * 0.42;
+
+sinL = 0.5 + 0.5 * sin(6.2831853 * rate * t);
+sinR = 0.5 + 0.5 * sin(6.2831853 * rate * t + phaseSpread);
+sqL = pulse(rate, 0.5);
+sqR = pulse(rate, 0.5 + 0.12 * sin(6.2831853 * rate * 0.25 * t));
+rawL = mix(sinL, sqL, p3);
+rawR = mix(sinR, sqR, p3);
+
+lfoL = slew(rawL, 0.01 + p3 * 0.05, 0);
+lfoR = slew(rawR, 0.01 + p3 * 0.05, 1);
+gainL = 1.0 - p2 + lfoL * p2;
+gainR = 1.0 - p2 + lfoR * p2;
+outL = inL * gainL;
+outR = inR * gainR;

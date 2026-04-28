@@ -21,6 +21,8 @@ struct EvalContext
     int maxRecursionDepth { 64 };
     bool executionAborted { false };
     bool returnTriggered { false };
+    bool breakTriggered { false };
+    bool continueTriggered { false };
     float returnValue { 0.0f };
     int instructionCount { 0 };
     int maxInstructions { 4096 };
@@ -114,7 +116,9 @@ struct ForStatement : Statement
 {
     juce::String varName;
     std::unique_ptr<Expr> startExpr;
-    std::unique_ptr<Expr> endExpr;
+    std::unique_ptr<Expr> conditionExpr;
+    std::unique_ptr<Expr> stepExpr;
+    bool isLegacyRangeLoop { false };
     std::unique_ptr<Statement> body;
     void execute (EvalContext&) const override;
 };
@@ -130,6 +134,16 @@ struct FunctionDefStatement : Statement
 struct ReturnStatement : Statement
 {
     std::unique_ptr<Expr> value;
+    void execute (EvalContext&) const override;
+};
+
+struct BreakStatement : Statement
+{
+    void execute (EvalContext&) const override;
+};
+
+struct ContinueStatement : Statement
+{
     void execute (EvalContext&) const override;
 };
 
@@ -179,6 +193,8 @@ private:
     std::unique_ptr<Statement> parseFor();
     std::unique_ptr<Statement> parseFunctionDef();
     std::unique_ptr<Statement> parseReturn();
+    std::unique_ptr<Statement> parseBreak();
+    std::unique_ptr<Statement> parseContinue();
     std::unique_ptr<Statement> parseAssignmentOrExpr();
     std::unique_ptr<Expr> parseExpression();
     std::unique_ptr<Expr> parseAddSub();

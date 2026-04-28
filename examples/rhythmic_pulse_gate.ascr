@@ -1,16 +1,22 @@
 #@p1: Tempo
 #@p2: Swing
 #@p3: Floor
-# p1 = 0.6
-# p2 = 0.42
-# p3 = 0.22
-# Rhythmic gate with swing, hold smoothing, and adjustable floor level
-base = 1.0 + p1 * 12.0;
-a = pulse(base, 0.45 + p2 * 0.25);
-b = pulse(base * (1.0 + p2 * 0.5), 0.22);
-raw = min(1.0, a * 0.8 + b * 0.9);
-floor = p3 * 0.4;
-target = max(raw, floor);
-g = slew(target, 0.01 + p2 * 0.08, 0);
+# p1 = 0.56
+# p2 = 0.38
+# p3 = 0.24
+# Rhythmic gate with swing plus sine underlay to keep it musical between chops
+# p1 = base rate, p2 = swing/shape, p3 = floor level
+base = 0.8 + p1 * 10.0;
+
+# Hybrid rhythmic mask: pulse accents + continuous sine bed
+pulseA = pulse(base, 0.42 + p2 * 0.2);
+pulseB = pulse(base * (1.0 + p2 * 0.6), 0.2 + p2 * 0.15);
+sineBed = 0.5 + 0.5 * sin(6.2831853 * base * t);
+raw = clamp(pulseA * 0.7 + pulseB * 0.65, 0.0, 1.0);
+shape = mix(sineBed, raw, 0.55 + p2 * 0.35);
+
+floor = p3 * 0.45;
+target = max(shape, floor);
+g = slew(target, 0.006 + p2 * 0.06, 0);
 outL = inL * g;
 outR = inR * g;

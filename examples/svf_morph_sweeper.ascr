@@ -1,0 +1,23 @@
+#@p1: Cutoff
+#@p2: Q
+#@p3: Morph
+#@p4: Wet
+# p1 = 0.42
+# p2 = 0.35
+# p3 = 0.5
+# p4 = 0.8
+# State-variable morph filter (LP/BP/HP blend) for broad tone design
+cut = 0.01 + p1 * 0.32;
+q = 0.25 + p2 * 1.4;
+lpL = svf(inL, cut, q, 0.0, 0);
+lpR = svf(inR, cut, q, 0.0, 1);
+bpL = svf(inL, cut, q, 1.0, 2);
+bpR = svf(inR, cut, q, 1.0, 3);
+hpL = svf(inL, cut, q, 2.0, 4);
+hpR = svf(inR, cut, q, 2.0, 5);
+midMorph = mix(lpL, bpL, p3);
+midMorphR = mix(lpR, bpR, p3);
+procL = mix(midMorph, hpL, p3 * p3);
+procR = mix(midMorphR, hpR, p3 * p3);
+outL = mix(inL, procL, p4);
+outR = mix(inR, procR, p4);

@@ -1,17 +1,15 @@
 #@p1: Macro1
 #@p2: Macro2
 #@p3: Macro3
-# p1 = 0.65
-# p2 = 0.5
-# p3 = 0.8
-# High-pass filter: subtracts one-pole LPF from input to isolate high frequencies
-# Creates a thin, bright, no-bass sound; add resonance for a sharp peak at cutoff
-# p1 = cutoff (low=heavy bass cut, high=gentle), p2 = resonance feedback, p3 = dry/wet
-coeff = 0.005 + p1 * 0.3;
-lpL = lpf1(inL + state_hpFbL * p2 * 0.7, coeff, 0);
-lpR = lpf1(inR + state_hpFbR * p2 * 0.7, coeff, 1);
-hpL = inL - lpL;
-hpR = inR - lpR;
+# p1 = 0.64
+# p2 = 0.44
+# p3 = 0.78
+# High-pass with dedicated hp1 primitive + optional resonance color
+# p1 = cutoff (low=strong bass cut), p2 = resonance color, p3 = dry/wet
+coeff = 0.004 + p1 * 0.24;
+res = p2 * 0.5;
+hpL = hp1(inL + state_hpFbL * res, coeff, 0);
+hpR = hp1(inR + state_hpFbR * res, coeff, 1);
 state_hpFbL = hpL;
 state_hpFbR = hpR;
 outL = mix(inL, hpL, p3);

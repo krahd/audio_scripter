@@ -80,7 +80,7 @@ void BlockStatement::execute (EvalContext& ctx) const
 
     for (const auto& stmt : statements)
     {
-        if (ctx.executionAborted || ctx.returnTriggered)
+        if (ctx.executionAborted || ctx.returnTriggered || ctx.breakTriggered || ctx.continueTriggered)
             break;
         if (stmt != nullptr)
             stmt->execute (ctx);
@@ -117,8 +117,19 @@ void WhileStatement::execute (EvalContext& ctx) const
     }
 
     while (! ctx.executionAborted && ! ctx.returnTriggered && condition != nullptr && condition->evaluate (ctx) != 0.0f)
+    {
         if (body != nullptr)
             body->execute (ctx);
+
+        if (ctx.breakTriggered)
+        {
+            ctx.breakTriggered = false;
+            break;
+        }
+
+        if (ctx.continueTriggered)
+            ctx.continueTriggered = false;
+    }
 
     --ctx.loopDepth;
 }
@@ -136,14 +147,35 @@ void ForStatement::execute (EvalContext& ctx) const
         return;
     }
 
-    const auto start = startExpr != nullptr ? startExpr->evaluate (ctx) : 0.0f;
-    const auto end   = endExpr   != nullptr ? endExpr->evaluate (ctx)   : 0.0f;
+    auto i = startExpr != nullptr ? startExpr->evaluate (ctx) : 0.0f;
+    auto legacyEnd = conditionExpr != nullptr ? conditionExpr->evaluate (ctx) : 0.0f;
 
-    for (float i = start; i < end && ! ctx.executionAborted && ! ctx.returnTriggered; i += 1.0f)
+    while (! ctx.executionAborted && ! ctx.returnTriggered)
     {
         ctx.locals[varName] = i;
+
+        const auto cond = isLegacyRangeLoop
+                            ? (i < legacyEnd ? 1.0f : 0.0f)
+                            : (conditionExpr != nullptr ? conditionExpr->evaluate (ctx) : 0.0f);
+        if (cond == 0.0f)
+            break;
+
         if (body != nullptr)
             body->execute (ctx);
+
+        if (ctx.breakTriggered)
+        {
+            ctx.breakTriggered = false;
+            break;
+        }
+
+        if (ctx.continueTriggered)
+            ctx.continueTriggered = false;
+
+        const auto step = isLegacyRangeLoop
+                            ? 1.0f
+                            : (stepExpr != nullptr ? stepExpr->evaluate (ctx) : 1.0f);
+        i += step;
     }
 
     --ctx.loopDepth;
@@ -157,6 +189,22 @@ void ReturnStatement::execute (EvalContext& ctx) const
 
     ctx.returnValue = value != nullptr ? value->evaluate (ctx) : 0.0f;
     ctx.returnTriggered = true;
+}
+
+void BreakStatement::execute (EvalContext& ctx) const
+{
+    if (! consumeInstruction (ctx))
+        return;
+
+    ctx.breakTriggered = true;
+}
+
+void ContinueStatement::execute (EvalContext& ctx) const
+{
+    if (! consumeInstruction (ctx))
+        return;
+
+    ctx.continueTriggered = true;
 }
 
 void AssignmentStatement::execute (EvalContext& ctx) const
@@ -326,6 +374,8 @@ std::unique_ptr<Statement> ScriptParser::parseStatement()
         case TokenType::kw_for:    return parseFor();
         case TokenType::kw_fn:     return parseFunctionDef();
         case TokenType::kw_return: return parseReturn();
+        case TokenType::kw_break:  return parseBreak();
+        case TokenType::kw_continue:return parseContinue();
         case TokenType::leftBrace: return parseBlock();
         case TokenType::identifier:return parseAssignmentOrExpr();
         default:
@@ -433,11 +483,23 @@ std::unique_ptr<Statement> ScriptParser::parseFor()
     if (! expect (TokenType::semicolon, "expected ';' after for start expr"))
         return nullptr;
 
-    auto end = parseExpression();
-    if (end == nullptr)
+    auto condition = parseExpression();
+    if (condition == nullptr)
         return nullptr;
 
-    if (! expect (TokenType::rightParen, "expected ')' after for end expr"))
+    std::unique_ptr<Expr> step;
+    bool legacyRange = true;
+
+    if (peek().type == TokenType::semicolon)
+    {
+        consume();
+        legacyRange = false;
+        step = parseExpression();
+        if (step == nullptr)
+            return nullptr;
+    }
+
+    if (! expect (TokenType::rightParen, "expected ')' after for condition/step"))
         return nullptr;
 
     auto body = parseStatement();
@@ -445,7 +507,9 @@ std::unique_ptr<Statement> ScriptParser::parseFor()
     auto node = std::make_unique<ForStatement>();
     node->varName = id.text;
     node->startExpr = std::move (start);
-    node->endExpr = std::move (end);
+    node->conditionExpr = std::move (condition);
+    node->stepExpr = std::move (step);
+    node->isLegacyRangeLoop = legacyRange;
     node->body = std::move (body);
     return node;
 }
@@ -511,6 +575,22 @@ std::unique_ptr<Statement> ScriptParser::parseReturn()
     auto node = std::make_unique<ReturnStatement>();
     node->value = std::move (expr);
     return node;
+}
+
+std::unique_ptr<Statement> ScriptParser::parseBreak()
+{
+    consume();
+    if (! expect (TokenType::semicolon, "expected ';' after break"))
+        return nullptr;
+    return std::make_unique<BreakStatement>();
+}
+
+std::unique_ptr<Statement> ScriptParser::parseContinue()
+{
+    consume();
+    if (! expect (TokenType::semicolon, "expected ';' after continue"))
+        return nullptr;
+    return std::make_unique<ContinueStatement>();
 }
 
 std::unique_ptr<Statement> ScriptParser::parseAssignmentOrExpr()

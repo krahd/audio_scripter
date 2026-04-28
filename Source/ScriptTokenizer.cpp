@@ -109,6 +109,8 @@ Token ScriptTokenizer::makeKeywordOrIdentifier()
     if (text == "for")   return { TokenType::kw_for, text, 0.0, line };
     if (text == "fn")    return { TokenType::kw_fn, text, 0.0, line };
     if (text == "return") return { TokenType::kw_return, text, 0.0, line };
+    if (text == "break") return { TokenType::kw_break, text, 0.0, line };
+    if (text == "continue") return { TokenType::kw_continue, text, 0.0, line };
     if (text == "true")  return { TokenType::kw_true, text, 1.0, line };
     if (text == "false") return { TokenType::kw_false, text, 0.0, line };
     return { TokenType::identifier, text, 0.0, line };

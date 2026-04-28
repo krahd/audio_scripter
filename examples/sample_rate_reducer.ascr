@@ -1,16 +1,19 @@
 #@p1: Macro1
 #@p2: Macro2
-# p1 = 0.65
-# p2 = 0.5
-# Sample rate reducer: holds each sample for N steps, creating staircase lo-fi texture
-# Distinct from bitcrusher — reduces sample rate, not bit depth
-# p1 = reduction (1–32x), p2 = dry/wet
-hold = 1.0 + p1 * 31.0;
+# p1 = 0.62
+# p2 = 0.56
+# Sample-rate reduction with post-smoothing and wet control for less brittle top-end
+# p1 = reduction amount (1–28x), p2 = wet
+hold = 1.0 + p1 * 27.0;
 state_count = state_count + 1.0;
 if (gt(state_count, hold)) {
     state_count = 0.0;
     state_heldL = inL;
     state_heldR = inR;
 }
-outL = mix(inL, state_heldL, p2);
-outR = mix(inR, state_heldR, p2);
+
+# Smooth the staircase a touch to avoid pure static-like fizz.
+smL = lpf1(state_heldL, 0.05 + (1.0 - p1) * 0.08, 0);
+smR = lpf1(state_heldR, 0.05 + (1.0 - p1) * 0.08, 1);
+outL = mix(inL, smL, p2);
+outR = mix(inR, smR, p2);

@@ -1,0 +1,24 @@
+#@p1: Time
+#@p2: Feedback
+#@p3: Width
+#@p4: Wet
+# p1 = 0.33
+# p2 = 0.25
+# p3 = 0.6
+# p4 = 0.75
+# Micro delay widener using delay primitive + sat soft feedback control
+base = 12.0 + p1 * 520.0;
+fb = p2 * 0.55;
+spread = 1.0 + p3 * 0.8;
+
+delInL = inL + state_fbL * fb;
+delInR = inR + state_fbR * fb;
+dL = delay(delInL, base, 0);
+dR = delay(delInR, base * spread, 1);
+state_fbL = sat(dL, 0.6 + p2 * 0.9, 0.0);
+state_fbR = sat(dR, 0.6 + p2 * 0.9, 0.0);
+
+wetL = mix(dL, state_fbR * 0.25, p3 * 0.5);
+wetR = mix(dR, state_fbL * 0.25, p3 * 0.5);
+outL = mix(inL, wetL, p4);
+outR = mix(inR, wetR, p4);

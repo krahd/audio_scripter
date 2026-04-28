@@ -72,6 +72,11 @@ juce::String stateKey (juce::String functionName, int lane)
     return "__" + functionName + "_" + juce::String (lane);
 }
 
+juce::String stateKeyWithSuffix (juce::String functionName, int lane, juce::String suffix)
+{
+    return "__" + functionName + "_" + juce::String (lane) + "_" + suffix;
+}
+
 float readLaneState (EvalContext& ctx, juce::String functionName, int lane)
 {
     if (ctx.persistentState == nullptr)
@@ -90,6 +95,26 @@ void writeLaneState (EvalContext& ctx, juce::String functionName, int lane, floa
         return;
 
     (*ctx.persistentState)[stateKey (std::move (functionName), lane)] = value;
+}
+
+float readLaneStateSuffix (EvalContext& ctx, juce::String functionName, int lane, juce::String suffix)
+{
+    if (ctx.persistentState == nullptr)
+        return 0.0f;
+
+    const auto key = stateKeyWithSuffix (std::move (functionName), lane, std::move (suffix));
+    if (const auto it = ctx.persistentState->find (key); it != ctx.persistentState->end())
+        return it->second;
+
+    return 0.0f;
+}
+
+void writeLaneStateSuffix (EvalContext& ctx, juce::String functionName, int lane, juce::String suffix, float value)
+{
+    if (ctx.persistentState == nullptr)
+        return;
+
+    (*ctx.persistentState)[stateKeyWithSuffix (std::move (functionName), lane, std::move (suffix))] = value;
 }
 
 int laneFromArgs (const std::vector<float>& args, size_t index)
@@ -162,6 +187,60 @@ void registerBuiltins (FunctionRegistry& registry)
         return y;
     };
 
+    registry.builtins["hp1"] = [] (EvalContext& ctx, const std::vector<float>& a)
+    {
+        const auto x = getArg (a, 0);
+        const auto coeff = clampf (getArg (a, 1), 0.0f, 1.0f);
+        const auto lane = laneFromArgs (a, 2);
+
+        auto y = readLaneState (ctx, "hp1_lpf", lane);
+        y += coeff * (x - y);
+        writeLaneState (ctx, "hp1_lpf", lane, y);
+        return x - y;
+    };
+
+    registry.builtins["bp1"] = [] (EvalContext& ctx, const std::vector<float>& a)
+    {
+        const auto x = getArg (a, 0);
+        const auto hpCoeff = clampf (getArg (a, 1), 0.0f, 1.0f);
+        const auto lpCoeff = clampf (getArg (a, 2), 0.0f, 1.0f);
+        const auto lane = laneFromArgs (a, 3);
+
+        auto hpLp = readLaneState (ctx, "bp1_hplp", lane);
+        hpLp += hpCoeff * (x - hpLp);
+        writeLaneState (ctx, "bp1_hplp", lane, hpLp);
+        const auto hp = x - hpLp;
+
+        auto bp = readLaneState (ctx, "bp1_bp", lane);
+        bp += lpCoeff * (hp - bp);
+        writeLaneState (ctx, "bp1_bp", lane, bp);
+        return bp;
+    };
+
+    registry.builtins["svf"] = [] (EvalContext& ctx, const std::vector<float>& a)
+    {
+        const auto x = getArg (a, 0);
+        const auto cutoff = clampf (getArg (a, 1), 0.001f, 0.99f);
+        const auto q = std::max (0.05f, getArg (a, 2, 0.7f));
+        const auto mode = (int) std::lrint (getArg (a, 3, 0.0f));
+        const auto lane = laneFromArgs (a, 4);
+
+        auto low = readLaneStateSuffix (ctx, "svf", lane, "low");
+        auto band = readLaneStateSuffix (ctx, "svf", lane, "band");
+        const auto high = x - low - q * band;
+        band += cutoff * high;
+        low += cutoff * band;
+        writeLaneStateSuffix (ctx, "svf", lane, "low", low);
+        writeLaneStateSuffix (ctx, "svf", lane, "band", band);
+
+        switch (mode)
+        {
+            case 1: return band;
+            case 2: return high;
+            default:return low;
+        }
+    };
+
     registry.builtins["slew"] = [] (EvalContext& ctx, const std::vector<float>& a)
     {
         const auto target = getArg (a, 0);
@@ -187,6 +266,48 @@ void registerBuiltins (FunctionRegistry& registry)
         y += coeff * (x - y);
         writeLaneState (ctx, "env", lane, y);
         return y;
+    };
+
+    registry.builtins["delay"] = [] (EvalContext& ctx, const std::vector<float>& a)
+    {
+        constexpr int kMaxDelaySamples = 96000;
+        const auto x = getArg (a, 0);
+        const auto samples = (int) std::lrint (clampf (getArg (a, 1, 1.0f), 1.0f, (float) (kMaxDelaySamples - 1)));
+        const auto lane = laneFromArgs (a, 2);
+        auto writePos = (int) std::lrint (readLaneStateSuffix (ctx, "delay", lane, "wp"));
+        writePos = std::clamp (writePos, 0, kMaxDelaySamples - 1);
+
+        auto readPos = writePos - samples;
+        if (readPos < 0)
+            readPos += kMaxDelaySamples;
+
+        const auto readSuffix = juce::String ("buf_") + juce::String (readPos);
+        const auto writeSuffix = juce::String ("buf_") + juce::String (writePos);
+        const auto y = readLaneStateSuffix (ctx, "delay", lane, readSuffix);
+        writeLaneStateSuffix (ctx, "delay", lane, writeSuffix, x);
+
+        writePos = (writePos + 1) % kMaxDelaySamples;
+        writeLaneStateSuffix (ctx, "delay", lane, "wp", (float) writePos);
+        return y;
+    };
+
+    registry.builtins["sat"] = [] (EvalContext&, const std::vector<float>& a)
+    {
+        const auto x = getArg (a, 0);
+        const auto drive = std::max (0.0f, getArg (a, 1, 1.0f));
+        const auto mode = (int) std::lrint (getArg (a, 2, 0.0f));
+        const auto d = x * (1.0f + drive);
+
+        switch (mode)
+        {
+            case 1: return (2.0f / juce::MathConstants<float>::pi) * std::atan (d);
+            case 2:
+            {
+                const auto y = d - (d * d * d) / 3.0f;
+                return clampf (y, -1.0f, 1.0f);
+            }
+            default: return std::tanh (d);
+        }
     };
 }
 } // namespace

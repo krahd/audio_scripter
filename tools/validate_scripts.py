@@ -12,6 +12,7 @@ EXAMPLES = ROOT / "examples"
 ALLOWED_FUNCTIONS = {
     "sin", "cos", "tan", "abs", "sqrt", "exp", "log", "tanh", "pow",
     "min", "max", "clamp", "clip", "mix", "wrap", "fold", "crush", "smoothstep", "noise", "gt", "lt", "ge", "le", "select", "pulse", "env", "lpf1", "slew",
+    "hp1", "bp1", "svf", "delay", "sat",
 }
 
 FUNCTION_RE = re.compile(r"\b([A-Za-z_][A-Za-z0-9_]*)\s*\(")
@@ -92,6 +93,30 @@ def lint_file(path: Path) -> list[str]:
     return errors
 
 
+def warn_file(path: Path) -> list[str]:
+    warnings: list[str] = []
+    lines = path.read_text(encoding="utf-8").splitlines()
+    code_lines = [(idx, l.strip()) for idx, l in enumerate(lines, start=1) if l.strip() and not l.strip().startswith("#")]
+
+    # Heuristic: always-on injected noise often sounds static-like.
+    for pos, (line_no, line) in enumerate(code_lines):
+        neighborhood = "\n".join(text for _, text in code_lines[max(0, pos - 2):pos + 1])
+        if "noise(" in line and "if (" not in neighborhood and "select(" not in neighborhood:
+            warnings.append(
+                f"{path.name}:{line_no}: noise appears always-on; consider transient gating + slew/lpf1 smoothing for cleaner texture"
+            )
+
+    # Heuristic: very hard gate edges with pulse at tiny duty cycles can click.
+    for pos, (line_no, line) in enumerate(code_lines):
+        neighborhood = "\n".join(text for _, text in code_lines[max(0, pos - 2):pos + 3])
+        if "pulse(" in line and ("0.00" in line or "0.01" in line) and "slew(" not in neighborhood:
+            warnings.append(
+                f"{path.name}:{line_no}: narrow pulse without nearby smoothing may click; consider slew()"
+            )
+
+    return warnings
+
+
 def main() -> int:
     scripts = sorted(EXAMPLES.glob("*.ascr"))
     if not scripts:
@@ -99,14 +124,21 @@ def main() -> int:
         return 1
 
     all_errors: list[str] = []
+    all_warnings: list[str] = []
     for script in scripts:
         all_errors.extend(lint_file(script))
+        all_warnings.extend(warn_file(script))
 
     if all_errors:
         print("Script validation failed:")
         for e in all_errors:
             print(f" - {e}")
         return 1
+
+    if all_warnings:
+        print("Script validation warnings:")
+        for w in all_warnings:
+            print(f" - {w}")
 
     print(f"Validated {len(scripts)} example scripts successfully.")
     return 0
