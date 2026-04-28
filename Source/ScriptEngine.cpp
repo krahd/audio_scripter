@@ -582,7 +582,10 @@ OPERATORS
 CONTROL FLOW
   if (condition) { ... } else { ... }
   while (condition) { ... }
-  for (i = 0; 8) { ... }    i iterates 0, 1, 2 … 7 (integer steps)
+  for (i = 0; 8) { ... }          i iterates 0, 1 … 7 (legacy step-by-1 form)
+  for (i = 0; lt(i,8); 1) { ... } extended form: condition and step are exprs
+  break;                           exit the innermost loop immediately
+  continue;                        skip to the next iteration of the innermost loop
   fn name(a, b) { return a + b; }
 
   Note: use gt/lt/ge/le/select for comparisons — < > == are not operators.
@@ -626,6 +629,28 @@ DSP / CREATIVE FUNCTIONS
 
   slew(target, speed, id) slew-rate limiter — moves toward target
                           at most speed units per sample
+
+  hp1(x, coeff, id)      one-pole high-pass filter (x minus its own lpf1)
+                          coeff ~0.002 = very dark HP, ~0.5 = bright
+                          id (optional) separates state per lane
+
+  bp1(x, hpC, lpC, id)   band-pass: hp1 then lpf1 in series
+                          hpC sets low-cut, lpC sets high-cut
+                          id (optional) separates state per lane
+
+  svf(x, cut, q, mode, id)  state-variable filter
+                          cut: normalised cutoff 0.001–0.99
+                          q: resonance (min 0.05, default 0.7)
+                          mode: 0=low-pass  1=band-pass  2=high-pass
+                          id (optional) separates state per lane
+
+  delay(x, samples, id)  delay line — delays x by N samples
+                          samples clamped 1–96000
+                          id (optional) separates state per lane
+
+  sat(x, drive, mode)    saturation / soft-clipping
+                          drive >= 0 (0 = unity, higher = more clip)
+                          mode: 0=tanh (default)  1=atan  2=cubic
 
 COMPARISON / LOGIC  (return 1.0 for true, 0.0 for false)
   gt(a, b)        1.0 if a > b

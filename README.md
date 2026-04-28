@@ -114,9 +114,12 @@ steps for CI.
 
 - See [docs/CHANGELOG.md](docs/CHANGELOG.md) for the release history. This repo is currently at `1.1.0`.
 
+## License
+
+This project is released under the [MIT License](LICENSE).
+
 ## Important notes & known gaps
 
-- No LICENSE file is present in the repository. Please add a `LICENSE` (e.g. MIT, Apache-2.0) to make reuse terms clear.
 - The codebase contains an internal audit in `docs/PLUGIN_AUDIT_AND_NEXT_STEPS.md` describing parser/runtime hygiene and recommended
   work to reach a fully-featured, test-backed release. Read it before making large language/runtime refactors.
 
