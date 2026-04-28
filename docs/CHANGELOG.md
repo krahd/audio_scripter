@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.8 - 2026-04-28
+
+### Added
+- Release packages (VST3, AU, Standalone) attached to GitHub release `v1.0.8`.
+
+### Changed
+- Bump project version to `1.0.8`.
+
 ## 1.0.6 - 2026-04-27
 
 ### Added
