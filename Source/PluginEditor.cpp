@@ -116,7 +116,6 @@ static void applyMacroInitialValuesFromText (AudioScripterAudioProcessor& proces
 AudioScripterAudioProcessorEditor::AudioScripterAudioProcessorEditor (AudioScripterAudioProcessor& p)
     : AudioProcessorEditor (&p), processor (p)
 {
-    setSize (1020, 760);
     // allow host/standalone window to be resizable when supported
     setResizable (true, true);
     setResizeLimits (600, 350, 3840, 2400);
@@ -131,8 +130,10 @@ AudioScripterAudioProcessorEditor::AudioScripterAudioProcessorEditor (AudioScrip
     scriptEditor = std::make_unique<juce::CodeEditorComponent> (codeDocument, codeTokeniser.get());
     scriptEditor->setFont (juce::FontOptions (13.0f));
     scriptEditor->setLineNumbersShown (true);
-    scriptEditor->setColour (juce::CodeEditorComponent::lineNumberTextId, juce::Colours::lightgrey.withAlpha (0.35f));
-    scriptEditor->setColour (juce::CodeEditorComponent::lineNumberBackgroundId, juce::Colour::fromRGB (28, 32, 36).withAlpha (0.15f));
+    scriptEditor->setColour (juce::CodeEditorComponent::backgroundColourId,    juce::Colour::fromRGB (28, 32, 36));
+    scriptEditor->setColour (juce::CodeEditorComponent::defaultTextColourId,   juce::Colours::lightgrey);
+    scriptEditor->setColour (juce::CodeEditorComponent::lineNumberTextId,       juce::Colours::lightgrey.withAlpha (0.35f));
+    scriptEditor->setColour (juce::CodeEditorComponent::lineNumberBackgroundId, juce::Colour::fromRGB (22, 26, 32));
     // initial content (fix encoding when loading from disk)
     scriptEditor->loadContent (processor.getScript());
     addAndMakeVisible (*scriptEditor);
@@ -220,6 +221,10 @@ AudioScripterAudioProcessorEditor::AudioScripterAudioProcessorEditor (AudioScrip
         // Apply initial macro parameter values from the currently loaded script text
         if (scriptEditor)
             applyMacroInitialValuesFromText (processor, scriptEditor->getDocument().getAllContent());
+
+    // setSize must come after all child components are created so that the
+    // first resized() call can lay them out correctly.
+    setSize (1020, 760);
 }
 
 AudioScripterAudioProcessorEditor::~AudioScripterAudioProcessorEditor()

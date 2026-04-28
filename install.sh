@@ -21,15 +21,19 @@ EOF
   exit 1
 }
 
+
 SYSTEM=0
 SRC_ARG=""
 DEST_ARG=""
+MAKE_BACKUP=0
+
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --system) SYSTEM=1; shift ;;
     --src) SRC_ARG="$2"; shift 2 ;;
     --dest) DEST_ARG="$2"; shift 2 ;;
+    -b) MAKE_BACKUP=1; shift ;;
     -h|--help) print_usage ;;
     *) if [[ -z "$SRC_ARG" ]]; then SRC_ARG="$1"; else DEST_ARG="$1"; fi; shift ;;
   esac
@@ -85,7 +89,9 @@ fi
 
 mkdir -p "$dest"
 
-if [[ -e "$dest/$plugin_name" ]]; then
+
+# Only make a backup if -b was specified
+if [[ $MAKE_BACKUP -eq 1 && -e "$dest/$plugin_name" ]]; then
   backup="$dest/${plugin_name}.bak.$(date +%Y%m%dT%H%M%S)"
   echo "Backing up existing plugin to $backup"
   mv "$dest/$plugin_name" "$backup"
