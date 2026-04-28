@@ -336,7 +336,6 @@ outR = tanh(inR * drive);
 juce::StringArray exampleNames()
 {
     return {
-        "Transparent soft clip",
         "Cross-feedback distortion",
         "Time-ramp ring modulation",
         "Low-pass morph",
@@ -432,7 +431,7 @@ outR = inR * mix(depthR, 1.0, mod);
 
 juce::String helpText()
 {
-    return R"(  audio_scripter — language reference
+    return juce::String::fromUTF8(R"(  
 
 OVERVIEW
   The script runs once per audio sample, top to bottom.
@@ -529,7 +528,7 @@ QUICK RECIPES
 
   # User-defined function
   fn softSat(x, drive) { return tanh(x * drive) / drive; }
-  outL = softSat(inL, 3.0);  outR = softSat(inR, 3.0);
-)";
+    outL = softSat(inL, 3.0);  outR = softSat(inR, 3.0);
+)");
 }
 } // namespace scripting

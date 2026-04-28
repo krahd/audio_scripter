@@ -87,6 +87,46 @@ static juce::String loadTextFileFixEncoding (const juce::File& file)
     return juce::String (raw);
 }
 
+// Detect and fix common UTF-8 -> CP1252 mojibake that appears as sequences like
+// "â" when a UTF-8 file was interpreted as Latin-1/CP1252. This tries a
+// conservative recovery only when the pattern is present and all characters
+// are in the single-byte range.
+static juce::String fixCp1252Mojibake (const juce::String& in)
+{
+    // Quick heuristic: look for the E2 80 .. sequence turned into three
+    // single-byte characters such as U+00E2 U+0080 U+00XX.
+    bool suspicious = false;
+    const int len = in.length();
+    for (int i = 0; i + 2 < len; ++i)
+    {
+        const auto a = (juce_wchar) in[i];
+        const auto b = (juce_wchar) in[i + 1];
+        const auto c = (juce_wchar) in[i + 2];
+        if (a == 0x00E2 && (b >= 0x0080 && b <= 0x00BF) && (c >= 0x0080 && c <= 0x00BF))
+        {
+            suspicious = true;
+            break;
+        }
+    }
+
+    if (! suspicious)
+        return in;
+
+    // Ensure all characters are in the single-byte range so we can reconstruct
+    // the original raw bytes and pass them through the CP1252 -> UTF-8 fixer.
+    std::string raw;
+    raw.reserve ((size_t) len);
+    for (int i = 0; i < len; ++i)
+    {
+        const juce_wchar w = in[i];
+        if (w > 0xFF)
+            return in; // abort if we encounter non-single-byte chars
+        raw.push_back ((char) (w & 0xFF));
+    }
+
+    return juce::String (cp1252_to_utf8 (raw));
+}
+
 static void applyMacroInitialValuesFromText (AudioScripterAudioProcessor& processorRef, const juce::String& text)
 {
     try
@@ -128,7 +168,11 @@ AudioScripterAudioProcessorEditor::AudioScripterAudioProcessorEditor (AudioScrip
     // Create tokeniser + code editor with syntax colouring and line numbers
     codeTokeniser = std::make_unique<juce::CPlusPlusCodeTokeniser>();
     scriptEditor = std::make_unique<juce::CodeEditorComponent> (codeDocument, codeTokeniser.get());
-    scriptEditor->setFont (juce::FontOptions (13.0f));
+    // Use a consistent font with fallback enabled and a 1.25 line-spacing factor.
+    const float baseEditorFontHeight = 13.0f;
+    const float lineSpacingFactor = 1.25f;
+    auto editorFontOptions = juce::FontOptions (baseEditorFontHeight * lineSpacingFactor).withFallbackEnabled (true);
+    scriptEditor->setFont (editorFontOptions);
     scriptEditor->setLineNumbersShown (true);
 
     // Solid colour: darkslategrey@50% pre-blended over the plugin gradient midpoint.
@@ -234,7 +278,8 @@ AudioScripterAudioProcessorEditor::AudioScripterAudioProcessorEditor (AudioScrip
     helpPanel = std::make_unique<juce::CodeEditorComponent> (helpDocument, codeTokeniser.get());
     helpPanel->setReadOnly (true);
     helpPanel->setLineNumbersShown (false);
-    helpPanel->setFont (juce::FontOptions (13.0f));
+    // Use the same font options as the main editor so glyph fallback and spacing match.
+    helpPanel->setFont (editorFontOptions);
     helpPanel->setColour (juce::CodeEditorComponent::backgroundColourId,    juce::Colour::fromRGB (38, 56, 60));
     helpPanel->setColour (juce::CodeEditorComponent::defaultTextColourId,   juce::Colour (0xffd4d4d4));
     helpPanel->setColour (juce::CodeEditorComponent::highlightColourId,     juce::Colour (0xff264f78));
@@ -254,7 +299,7 @@ AudioScripterAudioProcessorEditor::AudioScripterAudioProcessorEditor (AudioScrip
         cs.set ("Preprocessor Text", juce::Colour (0xff9cdcfe));
         helpPanel->setColourScheme (cs);
     }
-    helpDocument.replaceAllContent (scripting::helpText());
+    helpDocument.replaceAllContent (fixCp1252Mojibake (scripting::helpText()));
     addAndMakeVisible (*helpPanel);
 
         // Apply initial macro parameter values from the currently loaded script text
