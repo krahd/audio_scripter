@@ -6,7 +6,13 @@
       "Bash(ctest --test-dir build --output-on-failure)",
       "Bash(gh run *)",
       "Bash(git mv *)",
-      "Bash(cmake --build build --config Release --target audio_scripter_parser_tests)"
+      "Bash(cmake --build build --config Release --target audio_scripter_parser_tests)",
+      "Bash(gh pr *)",
+      "Bash(python3 -c \"import json,sys; jobs=json.load\\(sys.stdin\\)['jobs']; [print\\(j['name'], j['conclusion']\\) for j in jobs]\")",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "Bash(echo \"Exit: $?\")"
     ]
   }
 }
