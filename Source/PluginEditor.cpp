@@ -1,24 +1,141 @@
 #include "PluginEditor.h"
 #include <algorithm>
+#include <regex>
+#include <fstream>
+#include <sstream>
+
+// Try to detect and fix common Windows-1252 -> UTF-8 mojibake when loading files.
+static std::string cp1252_to_utf8 (const std::string& in)
+{
+    std::string out;
+    out.reserve (in.size() * 2);
+
+    for (unsigned char c : in)
+    {
+        if (c < 0x80)
+        {
+            out.push_back ((char) c);
+        }
+        else if (c >= 0xA0)
+        {
+            unsigned int cp = c; // 0xA0..0xFF -> U+00A0..U+00FF
+            if (cp <= 0x7FF)
+            {
+                out.push_back ((char) (0xC0 | (cp >> 6)));
+                out.push_back ((char) (0x80 | (cp & 0x3F)));
+            }
+            else
+            {
+                // not expected here
+            }
+        }
+        else
+        {
+            unsigned int cp = 0;
+            switch (c)
+            {
+                case 0x80: cp = 0x20AC; break; case 0x81: cp = 0x0081; break; case 0x82: cp = 0x201A; break;
+                case 0x83: cp = 0x0192; break; case 0x84: cp = 0x201E; break; case 0x85: cp = 0x2026; break;
+                case 0x86: cp = 0x2020; break; case 0x87: cp = 0x2021; break; case 0x88: cp = 0x02C6; break;
+                case 0x89: cp = 0x2030; break; case 0x8A: cp = 0x0160; break; case 0x8B: cp = 0x2039; break;
+                case 0x8C: cp = 0x0152; break; case 0x8D: cp = 0x008D; break; case 0x8E: cp = 0x017D; break;
+                case 0x8F: cp = 0x008F; break; case 0x90: cp = 0x0090; break; case 0x91: cp = 0x2018; break;
+                case 0x92: cp = 0x2019; break; case 0x93: cp = 0x201C; break; case 0x94: cp = 0x201D; break;
+                case 0x95: cp = 0x2022; break; case 0x96: cp = 0x2013; break; case 0x97: cp = 0x2014; break;
+                case 0x98: cp = 0x02DC; break; case 0x99: cp = 0x2122; break; case 0x9A: cp = 0x0161; break;
+                case 0x9B: cp = 0x203A; break; case 0x9C: cp = 0x0153; break; case 0x9D: cp = 0x009D; break;
+                case 0x9E: cp = 0x017E; break; case 0x9F: cp = 0x0178; break;
+            }
+
+            if (cp <= 0x7F)
+                out.push_back ((char) cp);
+            else if (cp <= 0x7FF)
+            {
+                out.push_back ((char) (0xC0 | (cp >> 6)));
+                out.push_back ((char) (0x80 | (cp & 0x3F)));
+            }
+            else
+            {
+                out.push_back ((char) (0xE0 | (cp >> 12)));
+                out.push_back ((char) (0x80 | ((cp >> 6) & 0x3F)));
+                out.push_back ((char) (0x80 | (cp & 0x3F)));
+            }
+        }
+    }
+
+    return out;
+}
+
+static juce::String loadTextFileFixEncoding (const juce::File& file)
+{
+    std::ifstream in (file.getFullPathName().toStdString(), std::ios::binary);
+    if (! in)
+        return {};
+
+    std::ostringstream ss;
+    ss << in.rdbuf();
+    const std::string raw = ss.str();
+
+    // If the raw bytes contain any CP1252-only control codes (0x80..0x9F), try CP1252 -> UTF-8 conversion.
+    for (unsigned char c : raw)
+    {
+        if (c >= 0x80 && c <= 0x9F)
+            return juce::String (cp1252_to_utf8 (raw));
+    }
+
+    // Otherwise assume UTF-8
+    return juce::String (raw);
+}
+
+static void applyMacroInitialValuesFromText (AudioScripterAudioProcessor& processorRef, const juce::String& text)
+{
+    try
+    {
+        const std::string s = text.toStdString();
+        std::regex re ("\\bp([1-8])\\s*=\\s*([-+]?(?:\\d+\\.?\\d*|\\.\\d+))");
+        std::smatch m;
+        auto it = s.cbegin();
+        while (std::regex_search (it, s.cend(), m, re))
+        {
+            const int idx = m[1].str()[0] - '1';
+            double val = 0.0;
+            try { val = std::stod (m[2].str()); } catch (...) { val = 0.0; }
+            if (val < 0.0) val = 0.0; if (val > 1.0) val = 1.0;
+            if (idx >= 0 && idx < 8)
+            {
+                if (auto* p = processorRef.getValueTreeState().getParameter (macroParamId (idx)))
+                    p->setValueNotifyingHost ((float) val);
+            }
+            it = m.suffix().first;
+        }
+    }
+    catch (...) {}
+}
 
 
 AudioScripterAudioProcessorEditor::AudioScripterAudioProcessorEditor (AudioScripterAudioProcessor& p)
     : AudioProcessorEditor (&p), processor (p)
 {
     setSize (1020, 760);
+    // allow host/standalone window to be resizable when supported
+    setResizable (true, true);
+    setResizeLimits (600, 350, 3840, 2400);
 
-    titleLabel.setText ("audio_scripter 1.0.6", juce::dontSendNotification);
+    titleLabel.setText ("audio_scripter 1.0.7", juce::dontSendNotification);
     titleLabel.setJustificationType (juce::Justification::centredLeft);
     titleLabel.setFont (juce::FontOptions (18.0f, juce::Font::bold));
     addAndMakeVisible (titleLabel);
 
-    scriptEditor.setFont (juce::FontOptions (15.0f));
-    scriptEditor.setLineSpacing (1.5f);
-    scriptEditor.setMultiLine (true);
-    scriptEditor.setReturnKeyStartsNewLine (true);
-    scriptEditor.setTabKeyUsedAsCharacter (true);
-    scriptEditor.setText (processor.getScript(), false);
-    addAndMakeVisible (scriptEditor);
+    // Create tokeniser + code editor with syntax colouring and line numbers
+    codeTokeniser = std::make_unique<juce::CPlusPlusCodeTokeniser>();
+    scriptEditor = std::make_unique<juce::CodeEditorComponent> (codeDocument, codeTokeniser.get());
+    scriptEditor->setFont (juce::FontOptions (13.0f));
+    scriptEditor->setLineNumbersShown (true);
+    scriptEditor->setColour (juce::CodeEditorComponent::lineNumberTextId, juce::Colours::lightgrey.withAlpha (0.35f));
+    scriptEditor->setColour (juce::CodeEditorComponent::lineNumberBackgroundId, juce::Colour::fromRGB (28, 32, 36).withAlpha (0.15f));
+    // initial content (fix encoding when loading from disk)
+    scriptEditor->loadContent (processor.getScript());
+    addAndMakeVisible (*scriptEditor);
 
     outputPanel.setMultiLine (true);
     outputPanel.setReadOnly (true);
@@ -71,6 +188,8 @@ AudioScripterAudioProcessorEditor::AudioScripterAudioProcessorEditor (AudioScrip
 #endif
 
     addAndMakeVisible (examplesBox);
+    // make "Select example..." visible by default
+    examplesBox.setSelectedId (1, juce::dontSendNotification);
 
     for (int i = 0; i < 8; ++i)
     {
@@ -94,7 +213,13 @@ AudioScripterAudioProcessorEditor::AudioScripterAudioProcessorEditor (AudioScrip
     helpPanel.setReadOnly (true);
     helpPanel.setColour (juce::TextEditor::backgroundColourId, juce::Colours::darkslategrey.withAlpha (0.5f));
     helpPanel.setText (scripting::helpText());
+    // change help panel line spacing per request
+    helpPanel.setLineSpacing (1.25f);
     addAndMakeVisible (helpPanel);
+
+        // Apply initial macro parameter values from the currently loaded script text
+        if (scriptEditor)
+            applyMacroInitialValuesFromText (processor, scriptEditor->getDocument().getAllContent());
 }
 
 AudioScripterAudioProcessorEditor::~AudioScripterAudioProcessorEditor()
@@ -146,7 +271,11 @@ void AudioScripterAudioProcessorEditor::resized()
 
     auto top = area.removeFromTop (area.getHeight() * 3 / 5);
 
-    scriptEditor.setBounds (top.removeFromLeft (top.getWidth() * 2 / 3));
+    const auto editorArea = top.removeFromLeft (top.getWidth() * 2 / 3);
+    if (scriptEditor)
+        scriptEditor->setBounds (editorArea);
+    else
+        scriptEditor = nullptr;
     top.removeFromLeft (8);
     outputPanel.setBounds (top);
 
@@ -178,19 +307,21 @@ void AudioScripterAudioProcessorEditor::comboBoxChanged (juce::ComboBox* box)
     {
         const auto file = exampleFiles[(size_t) idx];
         if (file.existsAsFile())
-            scriptEditor.setText (file.loadFileAsString(), false);
+            scriptEditor->loadContent (loadTextFileFixEncoding (file));
+            applyMacroInitialValuesFromText (processor, scriptEditor->getDocument().getAllContent());
         return;
     }
 
     // Fallback to built-in indexed examples (if available).
     const auto fallbackIdx = idx - (int) exampleFiles.size();
     if (fallbackIdx >= 0)
-        scriptEditor.setText (scripting::exampleScript (fallbackIdx));
+        scriptEditor->loadContent (scripting::exampleScript (fallbackIdx));
+        applyMacroInitialValuesFromText (processor, scriptEditor->getDocument().getAllContent());
 }
 
 void AudioScripterAudioProcessorEditor::applyScript()
 {
-    const auto result = processor.setScript (scriptEditor.getText());
+    const auto result = processor.setScript (scriptEditor->getDocument().getAllContent());
 
     if (result.ok)
     {
@@ -216,7 +347,7 @@ void AudioScripterAudioProcessorEditor::saveScriptToFile()
                 return;
 
             lastScriptDirectory = file.getParentDirectory();
-            const bool ok = file.replaceWithText (scriptEditor.getText());
+            const bool ok = file.replaceWithText (scriptEditor->getDocument().getAllContent());
 
             juce::MessageManager::callAsync ([this, ok, file]
             {
@@ -247,13 +378,16 @@ void AudioScripterAudioProcessorEditor::loadScriptFromFile()
                 return;
 
             lastScriptDirectory = file.getParentDirectory();
-            const auto text = file.loadFileAsString();
+            const auto text = loadTextFileFixEncoding (file);
 
             juce::MessageManager::callAsync ([this, text, file]
             {
-                scriptEditor.setText (text);
+                if (scriptEditor)
+                    scriptEditor->loadContent (text);
                 outputPanel.setColour (juce::TextEditor::textColourId, juce::Colours::lightgreen);
                 outputPanel.setText ("Loaded: " + file.getFullPathName());
+                if (scriptEditor)
+                    applyMacroInitialValuesFromText (processor, scriptEditor->getDocument().getAllContent());
             });
         });
 }
