@@ -1,5 +1,6 @@
 #include "ScriptParser.h"
 
+#include <algorithm>
 #include <cmath>
 
 namespace scripting
@@ -264,6 +265,18 @@ void EvalContext::setValue (const juce::String& name, float value)
 {
     if (name == "outL") { outL = value; return; }
     if (name == "outR") { outR = value; return; }
+    if (macros != nullptr)
+    {
+        const auto clamped = std::clamp (value, 0.0f, 1.0f);
+        if (name == "p1") { (*macros)[0] = clamped; return; }
+        if (name == "p2") { (*macros)[1] = clamped; return; }
+        if (name == "p3") { (*macros)[2] = clamped; return; }
+        if (name == "p4") { (*macros)[3] = clamped; return; }
+        if (name == "p5") { (*macros)[4] = clamped; return; }
+        if (name == "p6") { (*macros)[5] = clamped; return; }
+        if (name == "p7") { (*macros)[6] = clamped; return; }
+        if (name == "p8") { (*macros)[7] = clamped; return; }
+    }
 
     if (name.startsWith ("state_"))
     {

@@ -1,3 +1,9 @@
+#@p1: Macro1
+#@p2: Macro2
+#@p3: Macro3
+# p1 = 0.65
+# p2 = 0.5
+# p3 = 0.8
 # Polyrhythmic gating: three pulse rates (1 : 1.5 : 2) combine for complex rhythms
 # p1 = base tempo, p2 = noise floor level, p3 = gate slew smoothing
 base = 1.0 + p1 * 7.0;

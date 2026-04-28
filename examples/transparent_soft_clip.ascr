@@ -1,2 +1,18 @@
-outL = tanh(inL * 2.7) * 0.7;
-outR = tanh(inR * 2.7) * 0.7;
+#@p1: Drive
+#@p2: Knee
+#@p3: Wet
+# p1 = 0.72
+# p2 = 0.58
+# p3 = 0.85
+# Dynamic soft clipper with envelope-driven knee and wet blend
+atk = 0.002;
+rel = 0.06;
+ampL = env(inL, atk, rel, 0);
+ampR = env(inR, atk, rel, 1);
+drive = 1.0 + p1 * 9.0;
+kneeL = 0.2 + (1.0 - ampL) * p2 * 0.7;
+kneeR = 0.2 + (1.0 - ampR) * p2 * 0.7;
+procL = tanh((inL * drive) / kneeL) * kneeL;
+procR = tanh((inR * drive) / kneeR) * kneeR;
+outL = mix(inL, procL, p3);
+outR = mix(inR, procR, p3);

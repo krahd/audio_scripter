@@ -1,3 +1,9 @@
+#@p1: Macro1
+#@p2: Macro2
+#@p3: Macro3
+# p1 = 0.65
+# p2 = 0.5
+# p3 = 0.8
 # High-pass filter: subtracts one-pole LPF from input to isolate high frequencies
 # Creates a thin, bright, no-bass sound; add resonance for a sharp peak at cutoff
 # p1 = cutoff (low=heavy bass cut, high=gentle), p2 = resonance feedback, p3 = dry/wet

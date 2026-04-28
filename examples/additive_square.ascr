@@ -1,3 +1,9 @@
+#@p1: Macro1
+#@p2: Macro2
+#@p3: Macro3
+# p1 = 0.65
+# p2 = 0.5
+# p3 = 0.8
 # Additive synthesis: square wave from sum of odd Fourier harmonics via for loop
 # p1 = base frequency (40–1000 Hz), p2 = harmonic count (1–16), p3 = dry/wet
 freq = 40.0 + p1 * 960.0;

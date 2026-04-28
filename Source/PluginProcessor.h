@@ -10,7 +10,8 @@ inline juce::String macroParamId (int index)
     return "macro" + juce::String (index + 1);
 }
 
-class AudioScripterAudioProcessor final : public juce::AudioProcessor
+class AudioScripterAudioProcessor final : public juce::AudioProcessor,
+                                          private juce::AsyncUpdater
 {
 public:
     AudioScripterAudioProcessor();
@@ -45,10 +46,14 @@ public:
     juce::AudioProcessorValueTreeState& getValueTreeState() { return parameters; }
 
 private:
+    void handleAsyncUpdate() override;
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
     std::array<float, 8> getMacroValues() const;
+    void queueScriptMacroUpdate (const std::array<float, 8>& values);
 
     scripting::ScriptEngine engine;
     juce::AudioProcessorValueTreeState parameters;
     std::array<std::atomic<float>*, 8> macroParamAtoms {};
+    std::array<std::atomic<float>, 8> pendingMacroValues {};
+    std::atomic<bool> pendingMacroUpdate { false };
 };

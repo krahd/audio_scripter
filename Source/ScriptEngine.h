@@ -26,7 +26,7 @@ public:
     CompileResult compileAndInstall (const juce::String& source);
 
     void reset (double sampleRate);
-    void processBlock (juce::AudioBuffer<float>& buffer, const std::array<float, 8>& macros);
+    void processBlock (juce::AudioBuffer<float>& buffer, std::array<float, 8>& macros);
 
     juce::String getCurrentSource() const;
     juce::String getLastError() const;

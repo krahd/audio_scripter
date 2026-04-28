@@ -1,3 +1,9 @@
+#@p1: Macro1
+#@p2: Macro2
+#@p3: Macro3
+# p1 = 0.65
+# p2 = 0.5
+# p3 = 0.8
 # Chaotic amplitude modulator: logistic map transitions from stable LFO to chaos
 # p1 = chaos amount (0=periodic, 1=fully chaotic), p2 = update rate, p3 = dry/wet
 fn logistic(x, r) {

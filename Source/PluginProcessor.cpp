@@ -1,6 +1,7 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 
+#include <cmath>
 
 AudioScripterAudioProcessor::AudioScripterAudioProcessor()
     : AudioProcessor (BusesProperties()
@@ -8,6 +9,9 @@ AudioScripterAudioProcessor::AudioScripterAudioProcessor()
                       .withOutput ("Output", juce::AudioChannelSet::stereo(), true)),
     parameters (*this, nullptr, juce::Identifier ("PARAMETERS"), createParameterLayout())
 {
+    for (auto& pending : pendingMacroValues)
+        pending.store (0.0f);
+
     for (int i = 0; i < 8; ++i)
         macroParamAtoms[(size_t) i] = parameters.getRawParameterValue (macroParamId (i));
 
@@ -61,7 +65,52 @@ void AudioScripterAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer
     juce::ignoreUnused (midi);
     juce::ScopedNoDenormals noDenormals;
 
-    engine.processBlock (buffer, getMacroValues());
+    auto macroValues = getMacroValues();
+    engine.processBlock (buffer, macroValues);
+    queueScriptMacroUpdate (macroValues);
+}
+
+void AudioScripterAudioProcessor::queueScriptMacroUpdate (const std::array<float, 8>& values)
+{
+    bool changed = false;
+
+    for (int i = 0; i < 8; ++i)
+    {
+        const auto current = macroParamAtoms[(size_t) i] != nullptr ? macroParamAtoms[(size_t) i]->load() : 0.0f;
+        const auto target = juce::jlimit (0.0f, 1.0f, values[(size_t) i]);
+
+        if (std::abs (target - current) > 1.0e-4f)
+        {
+            pendingMacroValues[(size_t) i].store (target);
+            changed = true;
+        }
+    }
+
+    if (changed)
+    {
+        pendingMacroUpdate.store (true);
+        triggerAsyncUpdate();
+    }
+}
+
+void AudioScripterAudioProcessor::handleAsyncUpdate()
+{
+    if (! pendingMacroUpdate.exchange (false))
+        return;
+
+    for (int i = 0; i < 8; ++i)
+    {
+        auto* parameter = parameters.getParameter (macroParamId (i));
+        if (parameter == nullptr)
+            continue;
+
+        const auto target = pendingMacroValues[(size_t) i].load();
+        const auto current = macroParamAtoms[(size_t) i] != nullptr ? macroParamAtoms[(size_t) i]->load() : 0.0f;
+        if (std::abs (target - current) <= 1.0e-4f)
+            continue;
+
+        parameter->setValueNotifyingHost (target);
+    }
 }
 
 juce::AudioProcessorEditor* AudioScripterAudioProcessor::createEditor()

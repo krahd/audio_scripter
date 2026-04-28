@@ -1,3 +1,9 @@
+#@p1: Macro1
+#@p2: Macro2
+#@p3: Macro3
+# p1 = 0.65
+# p2 = 0.5
+# p3 = 0.8
 # Tremolo: LFO modulates volume from smooth sine waves to hard square-wave chops
 # p1 = rate (0.5–16 Hz), p2 = depth (0=off, 1=full cut), p3 = shape (0=sine, 1=square)
 rate = 0.5 + p1 * 15.5;

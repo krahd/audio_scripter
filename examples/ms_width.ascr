@@ -1,3 +1,7 @@
+#@p1: Macro1
+#@p2: Macro2
+# p1 = 0.65
+# p2 = 0.5
 # Mid/Side stereo width control with optional side channel saturation
 # p1 = width (0=mono, 0.5=original, 1=ultra-wide), p2 = side drive
 fn encMid(l, r) {

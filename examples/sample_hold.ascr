@@ -1,3 +1,7 @@
+#@p1: Macro1
+#@p2: Macro2
+# p1 = 0.65
+# p2 = 0.5
 # Sample-and-hold: captures audio at each trigger, holds between triggers
 # p1 = trigger rate (0.5–16 Hz), p2 = dry/wet mix
 rate = 0.5 + p1 * 15.5;

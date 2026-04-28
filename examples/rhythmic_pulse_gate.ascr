@@ -1,6 +1,16 @@
-freq = 1.0 + p1 * 16.0;
-duty = 0.1 + p2 * 0.8;
-g = pulse(freq, duty);
-mask = gt(g, 0.0);
-outL = mix(inL * 0.15, inL, mask);
-outR = mix(inR * 0.15, inR, mask);
+#@p1: Tempo
+#@p2: Swing
+#@p3: Floor
+# p1 = 0.6
+# p2 = 0.42
+# p3 = 0.22
+# Rhythmic gate with swing, hold smoothing, and adjustable floor level
+base = 1.0 + p1 * 12.0;
+a = pulse(base, 0.45 + p2 * 0.25);
+b = pulse(base * (1.0 + p2 * 0.5), 0.22);
+raw = min(1.0, a * 0.8 + b * 0.9);
+floor = p3 * 0.4;
+target = max(raw, floor);
+g = slew(target, 0.01 + p2 * 0.08, 0);
+outL = inL * g;
+outR = inR * g;

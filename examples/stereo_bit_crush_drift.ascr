@@ -1,5 +1,22 @@
-steps = 8.0 + 7.0 * sin(t * 0.29);
-cL = crush(inL, steps);
-cR = crush(inR, steps + 2.0);
-outL = slew(cL, 0.025, 0);
-outR = slew(cR, 0.020, 1);
+#@p1: Bits
+#@p2: Hold
+#@p3: Drift
+# p1 = 0.74
+# p2 = 0.58
+# p3 = 0.66
+# Distinct lo-fi stereo texture: bit-depth + sample-hold with drifting mismatch
+steps = 4.0 + p1 * 52.0;
+period = 1.0 + p2 * 30.0;
+drift = 0.2 + p3 * 2.5;
+state_cL = state_cL + 1.0;
+state_cR = state_cR + 1.0;
+if (gt(state_cL, period)) {
+    state_cL = 0.0;
+    state_hL = crush(inL, steps + sin(t * 1.7) * drift * 4.0);
+}
+if (gt(state_cR, period + drift * 3.0)) {
+    state_cR = 0.0;
+    state_hR = crush(inR, steps + cos(t * 1.2) * drift * 4.0);
+}
+outL = state_hL;
+outR = state_hR;

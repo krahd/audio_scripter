@@ -32,7 +32,7 @@ struct EvalContext
     float sr { 44100.0f };
     float t { 0.0f };
 
-    const std::array<float, kNumMacros>* macros { nullptr };
+    std::array<float, kNumMacros>* macros { nullptr };
     std::map<juce::String, float> locals;
     std::map<juce::String, float>* persistentState { nullptr };
     const FunctionRegistry* functionRegistry { nullptr };

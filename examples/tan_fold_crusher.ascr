@@ -1,3 +1,11 @@
+#@p1: Macro1
+#@p2: Macro2
+#@p3: Macro3
+#@p4: Macro4
+# p1 = 0.65
+# p2 = 0.5
+# p3 = 0.8
+# p4 = 0.5
 # Tan-fold-crush cascade: three distinct nonlinearities for complex grit
 # p1 = tan drive, p2 = fold threshold, p3 = bit depth, p4 = dry/wet
 fn tanClip(x, drv) {
