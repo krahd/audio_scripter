@@ -54,28 +54,38 @@
       },
       "group": "build",
       "problemMatcher": []
+    },
+    {
+      "label": "Build Release + Install VST3",
+      "type": "shell",
+      "command": "bash",
+      "args": [
+        "-lc",
+        "${workspaceFolder}/scripts/build_and_open_als.sh"
+      ],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      },
+      "group": "build",
+      "problemMatcher": []
+    },
+    {
+      "label": "Run standalone app",
+      "type": "shell",
+      "command": "open",
+      "args": [
+        "${workspaceFolder}/build/audio_scripter_artefacts/Standalone/audio_scripter.app"
+      ],
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared",
+        "showReuseMessage": false,
+        "clear": false
+      },
+      "problemMatcher": []
     }
   ]
-}
-{
-  "version": "2.0.0",
-  "tasks": [
-    {
-        "label": "Run standalone app",
-        "type": "shell",
-        "command": "open",
-        "args": [
-            "${workspaceFolder}/build/audio_scripter_artefacts/Standalone/audio_scripter.app"
-        ],
-        "presentation": {
-            "echo": true,
-            "reveal": "always",
-            "focus": false,
-            "panel": "shared",
-            "showReuseMessage": false,
-            "clear": false
-        },
-        "problemMatcher": []
-    }
-]
 }

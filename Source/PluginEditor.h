@@ -34,7 +34,8 @@ private:
     juce::TextButton loadButton { "Load" };
     juce::ComboBox examplesBox;
     std::vector<juce::File> exampleFiles;
-    juce::TextEditor helpPanel;
+    juce::CodeDocument helpDocument;
+    std::unique_ptr<juce::CodeEditorComponent> helpPanel;
 
     std::array<juce::Slider, 8> macroSliders;
     std::array<juce::Label, 8> macroLabels;
