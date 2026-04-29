@@ -24,6 +24,7 @@ private:
     void applyMacroLabelsFromText (const juce::String& text);
     void saveScriptToFile();
     void loadScriptFromFile();
+    void showAboutBox();
 
     AudioScripterAudioProcessor& processor;
 
@@ -39,6 +40,7 @@ private:
     juce::TextButton applyButton { "Apply" };
     juce::TextButton saveButton { "Save" };
     juce::TextButton loadButton { "Load" };
+    juce::TextButton aboutButton { "About" };
     juce::ComboBox examplesBox;
     std::vector<juce::File> exampleFiles;
     juce::CodeDocument helpDocument;

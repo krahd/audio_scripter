@@ -234,9 +234,11 @@ AudioScripterAudioProcessorEditor::AudioScripterAudioProcessorEditor (AudioScrip
     applyButton.addListener (this);
     saveButton.addListener (this);
     loadButton.addListener (this);
+    aboutButton.addListener (this);
     addAndMakeVisible (applyButton);
     addAndMakeVisible (saveButton);
     addAndMakeVisible (loadButton);
+    addAndMakeVisible (aboutButton);
 
     examplesBox.addListener (this);
     examplesBox.addItem ("Select example...", 1);
@@ -321,6 +323,7 @@ AudioScripterAudioProcessorEditor::~AudioScripterAudioProcessorEditor()
     applyButton.removeListener (this);
     saveButton.removeListener (this);
     loadButton.removeListener (this);
+    aboutButton.removeListener (this);
     examplesBox.removeListener (this);
 }
 
@@ -348,6 +351,8 @@ void AudioScripterAudioProcessorEditor::resized()
     loadButton.setBounds (controls.removeFromLeft (80));
     controls.removeFromLeft (10);
     examplesBox.setBounds (controls.removeFromLeft (240));
+    controls.removeFromLeft (10);
+    aboutButton.setBounds (controls.removeFromLeft (64));
 
     area.removeFromTop (8);
 
@@ -388,6 +393,8 @@ void AudioScripterAudioProcessorEditor::buttonClicked (juce::Button* b)
         saveScriptToFile();
     else if (b == &loadButton)
         loadScriptFromFile();
+    else if (b == &aboutButton)
+        showAboutBox();
 }
 
 void AudioScripterAudioProcessorEditor::comboBoxChanged (juce::ComboBox* box)
@@ -508,4 +515,71 @@ void AudioScripterAudioProcessorEditor::loadScriptFromFile()
                 outputPanel.setText ("Loaded: " + file.getFullPathName());
             });
         });
+}
+
+void AudioScripterAudioProcessorEditor::showAboutBox()
+{
+    struct AboutContent final : public juce::Component
+    {
+        AboutContent()
+        {
+            title.setText ("audio_scripter 1.1.0", juce::dontSendNotification);
+            title.setFont (juce::FontOptions (17.0f, juce::Font::bold));
+            title.setJustificationType (juce::Justification::centred);
+            title.setColour (juce::Label::textColourId, juce::Colour (0xff4ec9b0));
+            addAndMakeVisible (title);
+
+            tagline.setText ("Real-time scriptable audio effect plugin\nVST3  \xc2\xb7  AU  \xc2\xb7  Standalone",
+                             juce::dontSendNotification);
+            tagline.setFont (juce::FontOptions (12.5f));
+            tagline.setJustificationType (juce::Justification::centred);
+            tagline.setColour (juce::Label::textColourId, juce::Colour (0xff8a9aaa));
+            addAndMakeVisible (tagline);
+
+            link.setColour (juce::HyperlinkButton::textColourId, juce::Colour (0xff4ec9b0));
+            link.setFont (juce::FontOptions (12.0f), false, juce::Justification::centred);
+            addAndMakeVisible (link);
+
+            copyright.setText ("MIT License  \xc2\xa9  2026 krahd", juce::dontSendNotification);
+            copyright.setFont (juce::FontOptions (11.0f));
+            copyright.setJustificationType (juce::Justification::centred);
+            copyright.setColour (juce::Label::textColourId, juce::Colour (0xff525e68));
+            addAndMakeVisible (copyright);
+
+            setSize (320, 138);
+        }
+
+        void paint (juce::Graphics& g) override
+        {
+            g.fillAll (juce::Colour::fromRGB (38, 56, 60));
+        }
+
+        void resized() override
+        {
+            auto b = getLocalBounds().reduced (16, 12);
+            title.setBounds (b.removeFromTop (26));
+            tagline.setBounds (b.removeFromTop (34));
+            b.removeFromTop (6);
+            link.setBounds (b.removeFromTop (22));
+            b.removeFromTop (4);
+            copyright.setBounds (b.removeFromTop (18));
+        }
+
+        juce::Label title;
+        juce::Label tagline;
+        juce::HyperlinkButton link {
+            "krahd.github.io/audio_scripter",
+            juce::URL ("https://krahd.github.io/audio_scripter/")
+        };
+        juce::Label copyright;
+    };
+
+    juce::DialogWindow::LaunchOptions opts;
+    opts.dialogTitle                = "About audio_scripter";
+    opts.content.setOwned           (new AboutContent());
+    opts.escapeKeyTriggersCloseButton = true;
+    opts.useNativeTitleBar          = false;
+    opts.resizable                  = false;
+    opts.dialogBackgroundColour     = juce::Colour::fromRGB (38, 56, 60);
+    opts.launchAsync();
 }
