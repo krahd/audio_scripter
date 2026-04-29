@@ -272,22 +272,24 @@ void registerBuiltins (FunctionRegistry& registry)
     {
         constexpr int kMaxDelaySamples = 96000;
         const auto x = getArg (a, 0);
-        const auto samples = (int) std::lrint (clampf (getArg (a, 1, 1.0f), 1.0f, (float) (kMaxDelaySamples - 1)));
-        const auto lane = laneFromArgs (a, 2);
-        auto writePos = (int) std::lrint (readLaneStateSuffix (ctx, "delay", lane, "wp"));
-        writePos = std::clamp (writePos, 0, kMaxDelaySamples - 1);
+        const int samples = std::clamp ((int) std::lrint (getArg (a, 1, 1.0f)), 1, kMaxDelaySamples - 1);
+        const int lane = laneFromArgs (a, 2);
 
-        auto readPos = writePos - samples;
-        if (readPos < 0)
-            readPos += kMaxDelaySamples;
+        if (ctx.delayBuffers == nullptr)
+            return 0.0f;
 
-        const auto readSuffix = juce::String ("buf_") + juce::String (readPos);
-        const auto writeSuffix = juce::String ("buf_") + juce::String (writePos);
-        const auto y = readLaneStateSuffix (ctx, "delay", lane, readSuffix);
-        writeLaneStateSuffix (ctx, "delay", lane, writeSuffix, x);
+        auto& buf = (*ctx.delayBuffers)[lane];
+        if ((int) buf.size() < kMaxDelaySamples)
+            buf.assign ((size_t) kMaxDelaySamples, 0.0f);
 
-        writePos = (writePos + 1) % kMaxDelaySamples;
-        writeLaneStateSuffix (ctx, "delay", lane, "wp", (float) writePos);
+        auto& wp = (*ctx.delayWritePositions)[lane];
+
+        int rp = wp - samples;
+        if (rp < 0) rp += kMaxDelaySamples;
+
+        const float y = buf[(size_t) rp];
+        buf[(size_t) wp] = x;
+        wp = (wp + 1) % kMaxDelaySamples;
         return y;
     };
 
@@ -346,6 +348,8 @@ void ScriptEngine::reset (double sampleRate)
     currentSampleRate = sampleRate;
     sampleCounter = 0;
     persistentState.clear();
+    delayBuffers.clear();
+    delayWritePositions.clear();
     stateResetRequested.store (false);
 }
 
@@ -381,6 +385,8 @@ void ScriptEngine::processBlock (juce::AudioBuffer<float>& buffer, std::array<fl
     if (stateResetRequested.exchange (false))
     {
         persistentState.clear();
+        delayBuffers.clear();
+        delayWritePositions.clear();
         sampleCounter = 0;
     }
 
@@ -405,6 +411,8 @@ void ScriptEngine::processBlock (juce::AudioBuffer<float>& buffer, std::array<fl
     ctx.sr = (float) currentSampleRate;
     ctx.macros = &macros;
     ctx.persistentState = &persistentState;
+    ctx.delayBuffers = &delayBuffers;
+    ctx.delayWritePositions = &delayWritePositions;
     ctx.functionRegistry = &program->program.functionRegistry;
 
     for (int s = 0; s < numSamples; ++s)

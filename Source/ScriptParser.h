@@ -5,6 +5,8 @@
 #include <array>
 #include <functional>
 #include <map>
+#include <unordered_map>
+#include <vector>
 
 namespace scripting
 {
@@ -38,6 +40,8 @@ struct EvalContext
     std::map<juce::String, float> locals;
     std::map<juce::String, float>* persistentState { nullptr };
     const FunctionRegistry* functionRegistry { nullptr };
+    std::unordered_map<int, std::vector<float>>* delayBuffers { nullptr };
+    std::unordered_map<int, int>* delayWritePositions { nullptr };
 
     float getValue (const juce::String&) const;
     void setValue (const juce::String&, float);

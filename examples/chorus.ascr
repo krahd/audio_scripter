@@ -1,0 +1,19 @@
+#@p1: Rate
+#@p2: Depth
+#@p3: Wet
+# p1 = 0.25
+# p2 = 0.45
+# p3 = 0.7
+# Chorus: LFO-modulated short delays thicken the sound and add gentle pitch shimmer
+# L and R use 120-degree offset for natural stereo width
+# p1 = LFO rate (0.1–4 Hz), p2 = modulation depth, p3 = wet
+rate = 0.1 + p1 * 3.9;
+depth = p2 * 0.006;
+lfoL = 0.5 + 0.5 * sin(6.2831853 * rate * t);
+lfoR = 0.5 + 0.5 * sin(6.2831853 * rate * t + 2.094);
+dtL = (0.01 + lfoL * depth) * sr;
+dtR = (0.01 + lfoR * depth) * sr;
+choL = delay(inL, dtL, 0);
+choR = delay(inR, dtR, 1);
+outL = mix(inL, choL, p3);
+outR = mix(inR, choR, p3);

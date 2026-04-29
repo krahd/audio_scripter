@@ -5,6 +5,8 @@
 #include "ScriptParser.h"
 #include <atomic>
 #include <memory>
+#include <unordered_map>
+#include <vector>
 
 namespace scripting
 {
@@ -39,6 +41,8 @@ private:
     // (std::atomic_store / std::atomic_load) for portability with libc++.
     std::shared_ptr<const CompiledProgram> activeProgram;
     std::map<juce::String, float> persistentState;
+    std::unordered_map<int, std::vector<float>> delayBuffers;
+    std::unordered_map<int, int> delayWritePositions;
     std::atomic<bool> stateResetRequested { false };
     double currentSampleRate { 44100.0 };
     uint64_t sampleCounter { 0 };

@@ -1,0 +1,16 @@
+#@p1: Time
+#@p2: Feedback
+#@p3: Wet
+# p1 = 0.3
+# p2 = 0.35
+# p3 = 0.5
+# Tape delay: echo with adjustable time and feedback
+# p1 = delay time (50–750 ms), p2 = feedback, p3 = wet
+dtime = (0.05 + p1 * 0.7) * sr;
+fb = p2 * 0.75;
+dL = delay(inL + state_fbL * fb, dtime, 0);
+dR = delay(inR + state_fbR * fb, dtime, 1);
+state_fbL = dL;
+state_fbR = dR;
+outL = mix(inL, dL, p3);
+outR = mix(inR, dR, p3);

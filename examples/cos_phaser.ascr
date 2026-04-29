@@ -12,7 +12,7 @@
 dt = 1.0 / sr;
 state_lfoPhase = wrap(state_lfoPhase + (0.1 + p1 * 4.9) * dt, 0.0, 1.0);
 sweep = 0.5 + 0.5 * cos(6.2831853 * state_lfoPhase);
-coeff = 0.003 + sweep * p2 * 0.18;
+coeff = 0.008 + sweep * p2 * 0.38;
 res = p3 * 0.4;
 filtL = lpf1(inL + state_resL * res, coeff, 0);
 filtR = lpf1(inR + state_resR * res, coeff, 1);

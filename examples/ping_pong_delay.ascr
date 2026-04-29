@@ -1,0 +1,16 @@
+#@p1: Time
+#@p2: Feedback
+#@p3: Wet
+# p1 = 0.3
+# p2 = 0.4
+# p3 = 0.55
+# Ping-pong delay: echoes alternate between left and right channels
+# p1 = delay time (50–500 ms), p2 = feedback, p3 = wet
+dtime = (0.05 + p1 * 0.45) * sr;
+fb = p2 * 0.7;
+dL = delay(inL + state_pingR * fb, dtime, 0);
+dR = delay(inR + state_pingL * fb, dtime, 1);
+state_pingL = dL;
+state_pingR = dR;
+outL = mix(inL, dR, p3);
+outR = mix(inR, dL, p3);
