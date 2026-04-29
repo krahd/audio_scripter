@@ -191,7 +191,7 @@ AudioScripterAudioProcessorEditor::AudioScripterAudioProcessorEditor (AudioScrip
     setResizable (true, true);
     setResizeLimits (600, 350, 3840, 2400);
 
-    titleLabel.setText ("audio_scripter 1.1.0", juce::dontSendNotification);
+    titleLabel.setText ("audio_scripter 0.0.8", juce::dontSendNotification);
     titleLabel.setJustificationType (juce::Justification::centredLeft);
     titleLabel.setFont (juce::FontOptions (18.0f, juce::Font::bold));
     addAndMakeVisible (titleLabel);
@@ -349,8 +349,7 @@ void AudioScripterAudioProcessorEditor::resized()
     auto area = getLocalBounds().reduced (10);
     auto titleRow = area.removeFromTop (30);
     websiteButton.setBounds (titleRow.removeFromRight (240));
-    titleRow.removeFromRight (8);
-    aboutButton.setBounds (titleRow.removeFromRight (60));
+    aboutButton.setBounds (titleRow.removeFromRight (46));
     titleLabel.setBounds (titleRow);
 
     auto controls = area.removeFromTop (30);
@@ -534,30 +533,37 @@ void AudioScripterAudioProcessorEditor::showAboutBox()
     {
         AboutContent()
         {
-            title.setText ("audio_scripter 1.1.0", juce::dontSendNotification);
+            title.setText ("audio_scripter 0.0.8", juce::dontSendNotification);
             title.setFont (juce::FontOptions (17.0f, juce::Font::bold));
             title.setJustificationType (juce::Justification::centred);
             title.setColour (juce::Label::textColourId, juce::Colour (0xff4ec9b0));
             addAndMakeVisible (title);
 
-            tagline.setText ("Real-time scriptable audio effect plugin\nVST3  \xc2\xb7  AU  \xc2\xb7  Standalone",
-                             juce::dontSendNotification);
+            tagline.setText ("Real-time scriptable audio effects plugin", juce::dontSendNotification);
             tagline.setFont (juce::FontOptions (12.5f));
             tagline.setJustificationType (juce::Justification::centred);
             tagline.setColour (juce::Label::textColourId, juce::Colour (0xff8a9aaa));
             addAndMakeVisible (tagline);
 
+            const auto dot = juce::String::charToString (0x00B7);
+            formats.setText ("VST3  " + dot + "  AU  " + dot + "  Standalone", juce::dontSendNotification);
+            formats.setFont (juce::FontOptions (11.5f));
+            formats.setJustificationType (juce::Justification::centred);
+            formats.setColour (juce::Label::textColourId, juce::Colour (0xff8a9aaa));
+            addAndMakeVisible (formats);
+
             link.setColour (juce::HyperlinkButton::textColourId, juce::Colour (0xff4ec9b0));
             link.setFont (juce::FontOptions (12.0f), false, juce::Justification::centred);
             addAndMakeVisible (link);
 
-            copyright.setText ("MIT License  \xc2\xa9  2026 krahd", juce::dontSendNotification);
+            const auto copy = juce::String::charToString (0x00A9);
+            copyright.setText ("MIT License  " + copy + "  2026 krahd", juce::dontSendNotification);
             copyright.setFont (juce::FontOptions (11.0f));
             copyright.setJustificationType (juce::Justification::centred);
             copyright.setColour (juce::Label::textColourId, juce::Colour (0xff525e68));
             addAndMakeVisible (copyright);
 
-            setSize (320, 138);
+            setSize (320, 148);
         }
 
         void paint (juce::Graphics& g) override
@@ -569,7 +575,9 @@ void AudioScripterAudioProcessorEditor::showAboutBox()
         {
             auto b = getLocalBounds().reduced (16, 12);
             title.setBounds (b.removeFromTop (26));
-            tagline.setBounds (b.removeFromTop (34));
+            b.removeFromTop (2);
+            tagline.setBounds (b.removeFromTop (18));
+            formats.setBounds (b.removeFromTop (16));
             b.removeFromTop (6);
             link.setBounds (b.removeFromTop (22));
             b.removeFromTop (4);
@@ -578,6 +586,7 @@ void AudioScripterAudioProcessorEditor::showAboutBox()
 
         juce::Label title;
         juce::Label tagline;
+        juce::Label formats;
         juce::HyperlinkButton link {
             "krahd.github.io/audio_scripter",
             juce::URL ("https://krahd.github.io/audio_scripter/")
