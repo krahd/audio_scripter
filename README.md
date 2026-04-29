@@ -18,7 +18,7 @@ Write DSP scripts that run **once per audio sample**, manipulate `inL`/`inR`, an
 
 | Document | Contents |
 | --- | --- |
-| [Language manual](docs/LANGUAGE_SPEC_v2.md) | Full script language tutorial, reference, and examples |
+| [Language manual](docs/LANGUAGE_SPEC.md) | Full script language tutorial, reference, and examples |
 | [Changelog](docs/CHANGELOG.md) | Release history |
 | [Plugin audit](docs/PLUGIN_AUDIT_AND_NEXT_STEPS.md) | Internal release-engineering checklist |
 
