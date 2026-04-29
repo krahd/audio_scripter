@@ -214,6 +214,8 @@
     <div class="links">
       <a href="#examples">Examples</a>
       <a href="#reference">Reference</a>
+      <a href="language_spec.html">Language Manual</a>
+      <a href="developer_guide.html">Dev Guide</a>
       <a href="https://github.com/krahd/audio_scripter">GitHub</a>
       <a href="https://github.com/krahd/audio_scripter/releases">Releases</a>
     </div>
@@ -224,12 +226,12 @@
 <div class="hero">
   <div class="container">
     <h1>audio_scripter</h1>
-    <div class="version">v1.1.0</div>
+    <div class="version">v0.0.8</div>
     <p>A real-time scriptable audio effects plugin. Write per-sample DSP scripts, press Apply, hear the result — no compilation step, no DAW restart.</p>
     <div class="cta">
       <a class="btn btn-primary" href="https://github.com/krahd/audio_scripter/releases">Download</a>
       <a class="btn btn-secondary" href="https://github.com/krahd/audio_scripter">View on GitHub</a>
-      <a class="btn btn-secondary" href="LANGUAGE_SPEC.md">Language manual</a>
+      <a class="btn btn-secondary" href="language_spec.html">Language manual</a>
     </div>
   </div>
 </div>
@@ -369,15 +371,16 @@ outR = <span class="fn">mix</span>(inR, <span class="fn">iterFold</span>(inR, dr
       </div>
 
       <div class="example-card">
-        <h3>Envelope duck tremolo</h3>
-        <pre><span class="comment"># @p1: Rate  @p2: Duck depth</span>
-envL = <span class="fn">env</span>(inL, <span class="num">0.25</span>, <span class="num">0.01</span>, <span class="num">0</span>);
-envR = <span class="fn">env</span>(inR, <span class="num">0.25</span>, <span class="num">0.01</span>, <span class="num">1</span>);
-mod  = <span class="num">0.5</span> + <span class="num">0.5</span> * <span class="fn">pulse</span>(<span class="num">2.0</span> + p1 * <span class="num">8.0</span>, <span class="num">0.5</span>);
-dL   = <span class="fn">clamp</span>(<span class="num">1.0</span> - envL * (<span class="num">0.7</span> + p2), <span class="num">0.2</span>, <span class="num">1.0</span>);
-dR   = <span class="fn">clamp</span>(<span class="num">1.0</span> - envR * (<span class="num">0.7</span> + p2), <span class="num">0.2</span>, <span class="num">1.0</span>);
-outL = inL * <span class="fn">mix</span>(dL, <span class="num">1.0</span>, mod);
-outR = inR * <span class="fn">mix</span>(dR, <span class="num">1.0</span>, mod);</pre>
+        <h3>Ping-pong delay</h3>
+        <pre><span class="comment"># @p1: Time  @p2: Feedback  @p3: Wet</span>
+dtime = (<span class="num">0.05</span> + p1 * <span class="num">0.45</span>) * sr;
+fb = p2 * <span class="num">0.7</span>;
+dL = <span class="fn">delay</span>(inL + state_pingR * fb, dtime, <span class="num">0</span>);
+dR = <span class="fn">delay</span>(inR + state_pingL * fb, dtime, <span class="num">1</span>);
+state_pingL = dL;
+state_pingR = dR;
+outL = <span class="fn">mix</span>(inL, dR, p3);
+outR = <span class="fn">mix</span>(inR, dL, p3);</pre>
       </div>
 
     </div>
@@ -393,8 +396,8 @@ outR = inR * <span class="fn">mix</span>(dR, <span class="num">1.0</span>, mod);
   <div class="container">
     <h2>Language reference</h2>
     <p style="color:var(--dim);margin-bottom:24px;">
-      For the full manual with tutorials and design patterns, see
-      <a href="LANGUAGE_SPEC.md">docs/LANGUAGE_SPEC.md</a>.
+      For the full manual with tutorials and design patterns, see the
+      <a href="language_spec.html">Language Manual</a>.
     </p>
 
     <table class="ref-table">
@@ -493,7 +496,8 @@ outR = inR * <span class="fn">mix</span>(dR, <span class="num">1.0</span>, mod);
       audio_scripter &nbsp;·&nbsp;
       <a href="https://github.com/krahd/audio_scripter">GitHub</a> &nbsp;·&nbsp;
       <a href="https://github.com/krahd/audio_scripter/releases">Releases</a> &nbsp;·&nbsp;
-      <a href="LANGUAGE_SPEC.md">Language manual</a> &nbsp;·&nbsp;
+      <a href="language_spec.html">Language Manual</a> &nbsp;·&nbsp;
+      <a href="developer_guide.html">Dev Guide</a> &nbsp;·&nbsp;
       <a href="https://github.com/krahd/audio_scripter/blob/main/LICENSE">MIT License</a>
     </p>
   </div>
