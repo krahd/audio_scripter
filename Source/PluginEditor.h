@@ -28,6 +28,10 @@ private:
     AudioScripterAudioProcessor& processor;
 
     juce::Label titleLabel;
+    juce::HyperlinkButton websiteButton {
+        "krahd.github.io/audio_scripter",
+        juce::URL ("https://krahd.github.io/audio_scripter/")
+    };
     juce::CodeDocument codeDocument;
     std::unique_ptr<juce::CodeEditorComponent> scriptEditor;
     std::unique_ptr<ScriptCodeTokeniser> codeTokeniser;

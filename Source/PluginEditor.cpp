@@ -191,10 +191,14 @@ AudioScripterAudioProcessorEditor::AudioScripterAudioProcessorEditor (AudioScrip
     setResizable (true, true);
     setResizeLimits (600, 350, 3840, 2400);
 
-    titleLabel.setText ("audio_scripter 1.0.7", juce::dontSendNotification);
+    titleLabel.setText ("audio_scripter 1.1.0", juce::dontSendNotification);
     titleLabel.setJustificationType (juce::Justification::centredLeft);
     titleLabel.setFont (juce::FontOptions (18.0f, juce::Font::bold));
     addAndMakeVisible (titleLabel);
+
+    websiteButton.setFont (juce::FontOptions (12.0f), false, juce::Justification::centredRight);
+    websiteButton.setColour (juce::HyperlinkButton::textColourId, juce::Colour (0xff4ec9b0));
+    addAndMakeVisible (websiteButton);
 
     // Create tokeniser + code editor with syntax colouring and line numbers
     codeTokeniser = std::make_unique<ScriptCodeTokeniser>();
@@ -334,7 +338,9 @@ void AudioScripterAudioProcessorEditor::paint (juce::Graphics& g)
 void AudioScripterAudioProcessorEditor::resized()
 {
     auto area = getLocalBounds().reduced (10);
-    titleLabel.setBounds (area.removeFromTop (30));
+    auto titleRow = area.removeFromTop (30);
+    websiteButton.setBounds (titleRow.removeFromRight (240));
+    titleLabel.setBounds (titleRow);
 
     auto controls = area.removeFromTop (30);
     applyButton.setBounds (controls.removeFromLeft (80));

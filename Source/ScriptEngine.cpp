@@ -551,7 +551,8 @@ outR = inR * mix(depthR, 1.0, mod);
 
 juce::String helpText()
 {
-    return juce::String::fromUTF8(R"(  
+    return juce::String::fromUTF8(R"(
+  audio_scripter 1.1.0  —  https://krahd.github.io/audio_scripter/
 
 OVERVIEW
   The script runs once per audio sample, top to bottom.

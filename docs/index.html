@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>audio_scripter — scriptable audio effects plugin</title>
+  <style>
+    :root {
+      --bg:       #161a20;
+      --surface:  #1e2a32;
+      --card:     #263840;
+      --border:   #2d4858;
+      --text:     #d4d4d4;
+      --dim:      #8a9aaa;
+      --accent:   #4ec9b0;
+      --accent2:  #569cd6;
+      --kw:       #c586c0;
+      --str:      #ce9178;
+      --num:      #b5cea8;
+      --comment:  #6a9955;
+      --fn:       #dcdcaa;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      font-size: 16px;
+      line-height: 1.6;
+    }
+
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    /* ── layout ── */
+    .container { max-width: 900px; margin: 0 auto; padding: 0 24px; }
+
+    /* ── nav ── */
+    nav {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 0;
+    }
+    nav .inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 0 24px;
+      height: 52px;
+    }
+    nav .brand {
+      font-family: "Courier New", Courier, monospace;
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: var(--accent);
+      letter-spacing: -0.5px;
+    }
+    nav .links { display: flex; gap: 24px; }
+    nav .links a { color: var(--dim); font-size: 0.9rem; }
+    nav .links a:hover { color: var(--text); text-decoration: none; }
+
+    /* ── hero ── */
+    .hero {
+      padding: 72px 0 56px;
+      text-align: center;
+    }
+    .hero h1 {
+      font-family: "Courier New", Courier, monospace;
+      font-size: clamp(2.4rem, 6vw, 3.6rem);
+      font-weight: 700;
+      color: var(--accent);
+      letter-spacing: -1px;
+      margin-bottom: 16px;
+    }
+    .hero .version {
+      display: inline-block;
+      background: var(--card);
+      border: 1px solid var(--border);
+      color: var(--dim);
+      font-size: 0.8rem;
+      font-family: monospace;
+      padding: 2px 10px;
+      border-radius: 4px;
+      margin-bottom: 20px;
+    }
+    .hero p {
+      font-size: 1.15rem;
+      color: var(--dim);
+      max-width: 580px;
+      margin: 0 auto 32px;
+    }
+    .cta { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+    .btn {
+      display: inline-block;
+      padding: 10px 24px;
+      border-radius: 6px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.15s;
+    }
+    .btn:hover { opacity: 0.85; text-decoration: none; }
+    .btn-primary { background: var(--accent); color: #111; }
+    .btn-secondary {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text);
+    }
+
+    /* ── sections ── */
+    section { padding: 56px 0; border-top: 1px solid var(--border); }
+    h2 {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 28px;
+    }
+    h3 {
+      font-size: 1.05rem;
+      font-weight: 600;
+      color: var(--accent2);
+      margin-bottom: 10px;
+    }
+
+    /* ── features grid ── */
+    .features {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 16px;
+    }
+    .feature {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 20px;
+    }
+    .feature .icon { font-size: 1.4rem; margin-bottom: 10px; }
+    .feature p { color: var(--dim); font-size: 0.9rem; margin-top: 6px; }
+
+    /* ── code blocks ── */
+    pre {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 20px;
+      overflow-x: auto;
+      font-family: "Courier New", Courier, monospace;
+      font-size: 0.88rem;
+      line-height: 1.6;
+      color: var(--text);
+    }
+    .comment { color: var(--comment); }
+    .kw      { color: var(--kw); }
+    .fn      { color: var(--fn); }
+    .num     { color: var(--num); }
+    .str     { color: var(--str); }
+
+    /* ── examples grid ── */
+    .examples { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    @media (max-width: 640px) { .examples { grid-template-columns: 1fr; } }
+    .example-card h3 { margin-bottom: 8px; }
+
+    /* ── reference table ── */
+    .ref-table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+    .ref-table th {
+      text-align: left;
+      color: var(--dim);
+      font-weight: 600;
+      border-bottom: 1px solid var(--border);
+      padding: 6px 12px 6px 0;
+    }
+    .ref-table td {
+      padding: 6px 12px 6px 0;
+      border-bottom: 1px solid var(--surface);
+      vertical-align: top;
+    }
+    .ref-table td:first-child {
+      font-family: monospace;
+      color: var(--fn);
+      white-space: nowrap;
+      padding-right: 20px;
+    }
+    .ref-table .section-header td {
+      padding-top: 18px;
+      color: var(--accent2);
+      font-weight: 600;
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      border-bottom: 1px solid var(--border);
+    }
+
+    /* ── footer ── */
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 32px 0;
+      text-align: center;
+      color: var(--dim);
+      font-size: 0.88rem;
+    }
+    footer a { color: var(--dim); }
+    footer a:hover { color: var(--accent); }
+  </style>
+</head>
+<body>
+
+<nav>
+  <div class="inner">
+    <span class="brand">audio_scripter</span>
+    <div class="links">
+      <a href="#examples">Examples</a>
+      <a href="#reference">Reference</a>
+      <a href="https://github.com/krahd/audio_scripter">GitHub</a>
+      <a href="https://github.com/krahd/audio_scripter/releases">Releases</a>
+    </div>
+  </div>
+</nav>
+
+<!-- hero -->
+<div class="hero">
+  <div class="container">
+    <h1>audio_scripter</h1>
+    <div class="version">v1.1.0</div>
+    <p>A real-time scriptable audio effects plugin. Write per-sample DSP scripts, press Apply, hear the result — no compilation step, no DAW restart.</p>
+    <div class="cta">
+      <a class="btn btn-primary" href="https://github.com/krahd/audio_scripter/releases">Download</a>
+      <a class="btn btn-secondary" href="https://github.com/krahd/audio_scripter">View on GitHub</a>
+      <a class="btn btn-secondary" href="LANGUAGE_SPEC_v2.md">Language manual</a>
+    </div>
+  </div>
+</div>
+
+<!-- features -->
+<section>
+  <div class="container">
+    <h2>Features</h2>
+    <div class="features">
+      <div class="feature">
+        <div class="icon">⚡</div>
+        <h3>Per-sample execution</h3>
+        <p>Scripts run once per audio sample at full sample-rate precision. No block overhead, no approximation.</p>
+      </div>
+      <div class="feature">
+        <div class="icon">🔄</div>
+        <h3>Hot reload</h3>
+        <p>Edit your script, press Apply. The engine swaps the program lock-free — audio never stops.</p>
+      </div>
+      <div class="feature">
+        <div class="icon">🎛️</div>
+        <h3>8 automatable macros</h3>
+        <p><code>p1</code>–<code>p8</code> are full DAW parameters. Automate them, MIDI-map them, modulate them.</p>
+      </div>
+      <div class="feature">
+        <div class="icon">🔧</div>
+        <h3>DSP primitives</h3>
+        <p>Built-in filters (<code>lpf1</code>, <code>hp1</code>, <code>svf</code>), delay lines, envelope followers, saturation, and more.</p>
+      </div>
+      <div class="feature">
+        <div class="icon">💾</div>
+        <h3>Persistent state</h3>
+        <p>Variables prefixed <code>state_</code> survive across samples. Build oscillators, filters, and feedback with ordinary assignments.</p>
+      </div>
+      <div class="feature">
+        <div class="icon">📦</div>
+        <h3>VST3 · AU · Standalone</h3>
+        <p>macOS and Windows builds. AU for Logic, VST3 for everything else, or run standalone without a DAW.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- quick start -->
+<section>
+  <div class="container">
+    <h2>Quick start</h2>
+    <p style="color:var(--dim);margin-bottom:24px;">
+      Every script sees <code>inL</code>, <code>inR</code> (input samples), <code>outL</code>, <code>outR</code> (output — default to input),
+      <code>sr</code> (sample rate), <code>t</code> (time in seconds), and <code>p1</code>–<code>p8</code> (macro knobs).
+    </p>
+
+    <h3>Minimal pass-through</h3>
+    <pre><span class="comment"># empty script — outL/outR default to inL/inR</span></pre>
+
+    <br>
+    <h3>Macro-driven soft saturation</h3>
+    <pre><span class="comment"># @p1: Drive</span>
+<span class="comment"># p1 = 0.4</span>
+drive = <span class="num">1.0</span> + p1 * <span class="num">5.0</span>;
+outL = <span class="fn">tanh</span>(inL * drive);
+outR = <span class="fn">tanh</span>(inR * drive);</pre>
+
+    <br>
+    <h3>Phase-accumulator oscillator (440 Hz)</h3>
+    <pre>state_phase = <span class="fn">wrap</span>(state_phase + <span class="num">440.0</span> / sr, <span class="num">0.0</span>, <span class="num">1.0</span>);
+outL = <span class="fn">sin</span>(<span class="num">6.2831853</span> * state_phase);
+outR = outL;</pre>
+
+    <br>
+    <h3>User-defined function</h3>
+    <pre><span class="kw">fn</span> <span class="fn">softClip</span>(x, drive) {
+    <span class="kw">return</span> <span class="fn">tanh</span>(x * (<span class="num">1.0</span> + drive)) / (<span class="num">1.0</span> + drive);
+}
+
+outL = <span class="fn">softClip</span>(inL, p1 * <span class="num">4.0</span>);
+outR = <span class="fn">softClip</span>(inR, p1 * <span class="num">4.0</span>);</pre>
+  </div>
+</section>
+
+<!-- examples -->
+<section id="examples">
+  <div class="container">
+    <h2>Example scripts</h2>
+    <div class="examples">
+
+      <div class="example-card">
+        <h3>SVF morphing filter</h3>
+        <pre><span class="comment"># @p1: Cutoff  @p2: Q  @p3: Morph  @p4: Wet</span>
+cut = <span class="num">0.01</span> + p1 * <span class="num">0.32</span>;
+q   = <span class="num">0.25</span> + p2 * <span class="num">1.4</span>;
+lpL = <span class="fn">svf</span>(inL, cut, q, <span class="num">0.0</span>, <span class="num">0</span>);
+bpL = <span class="fn">svf</span>(inL, cut, q, <span class="num">1.0</span>, <span class="num">2</span>);
+hpL = <span class="fn">svf</span>(inL, cut, q, <span class="num">2.0</span>, <span class="num">4</span>);
+procL = <span class="fn">mix</span>(<span class="fn">mix</span>(lpL, bpL, p3), hpL, p3 * p3);
+lpR = <span class="fn">svf</span>(inR, cut, q, <span class="num">0.0</span>, <span class="num">1</span>);
+bpR = <span class="fn">svf</span>(inR, cut, q, <span class="num">1.0</span>, <span class="num">3</span>);
+hpR = <span class="fn">svf</span>(inR, cut, q, <span class="num">2.0</span>, <span class="num">5</span>);
+procR = <span class="fn">mix</span>(<span class="fn">mix</span>(lpR, bpR, p3), hpR, p3 * p3);
+outL = <span class="fn">mix</span>(inL, procL, p4);
+outR = <span class="fn">mix</span>(inR, procR, p4);</pre>
+      </div>
+
+      <div class="example-card">
+        <h3>Micro-delay widener</h3>
+        <pre><span class="comment"># @p1: Time  @p2: Feedback  @p3: Width  @p4: Wet</span>
+base = <span class="num">12.0</span> + p1 * <span class="num">520.0</span>;
+fb   = p2 * <span class="num">0.55</span>;
+spread = <span class="num">1.0</span> + p3 * <span class="num">0.8</span>;
+
+delInL = inL + state_fbL * fb;
+delInR = inR + state_fbR * fb;
+dL = <span class="fn">delay</span>(delInL, base, <span class="num">0</span>);
+dR = <span class="fn">delay</span>(delInR, base * spread, <span class="num">1</span>);
+state_fbL = <span class="fn">sat</span>(dL, <span class="num">0.6</span> + p2 * <span class="num">0.9</span>, <span class="num">0</span>);
+state_fbR = <span class="fn">sat</span>(dR, <span class="num">0.6</span> + p2 * <span class="num">0.9</span>, <span class="num">0</span>);
+outL = <span class="fn">mix</span>(inL, dL, p4);
+outR = <span class="fn">mix</span>(inR, dR, p4);</pre>
+      </div>
+
+      <div class="example-card">
+        <h3>Iterative wavefold</h3>
+        <pre><span class="comment"># @p1: Drive  @p2: Iterations  @p3: Wet</span>
+<span class="kw">fn</span> <span class="fn">iterFold</span>(x, drv, iters) {
+    y = x * drv;
+    <span class="kw">for</span> (k = <span class="num">0.0</span>; <span class="fn">lt</span>(k, <span class="num">12.0</span>); <span class="num">1.0</span>) {
+        <span class="kw">if</span> (<span class="fn">ge</span>(k, iters)) { <span class="kw">break</span>; }
+        <span class="kw">if</span> (<span class="fn">lt</span>(<span class="fn">abs</span>(y), <span class="num">0.02</span>)) { <span class="kw">continue</span>; }
+        y = <span class="fn">fold</span>(y, <span class="num">-1.0</span>, <span class="num">1.0</span>);
+    }
+    <span class="kw">return</span> y * <span class="num">0.65</span>;
+}
+drive = <span class="num">1.0</span> + p1 * <span class="num">7.0</span>;
+iters = <span class="num">1.0</span> + p2 * <span class="num">11.0</span>;
+outL = <span class="fn">mix</span>(inL, <span class="fn">iterFold</span>(inL, drive, iters), p3);
+outR = <span class="fn">mix</span>(inR, <span class="fn">iterFold</span>(inR, drive, iters), p3);</pre>
+      </div>
+
+      <div class="example-card">
+        <h3>Envelope duck tremolo</h3>
+        <pre><span class="comment"># @p1: Rate  @p2: Duck depth</span>
+envL = <span class="fn">env</span>(inL, <span class="num">0.25</span>, <span class="num">0.01</span>, <span class="num">0</span>);
+envR = <span class="fn">env</span>(inR, <span class="num">0.25</span>, <span class="num">0.01</span>, <span class="num">1</span>);
+mod  = <span class="num">0.5</span> + <span class="num">0.5</span> * <span class="fn">pulse</span>(<span class="num">2.0</span> + p1 * <span class="num">8.0</span>, <span class="num">0.5</span>);
+dL   = <span class="fn">clamp</span>(<span class="num">1.0</span> - envL * (<span class="num">0.7</span> + p2), <span class="num">0.2</span>, <span class="num">1.0</span>);
+dR   = <span class="fn">clamp</span>(<span class="num">1.0</span> - envR * (<span class="num">0.7</span> + p2), <span class="num">0.2</span>, <span class="num">1.0</span>);
+outL = inL * <span class="fn">mix</span>(dL, <span class="num">1.0</span>, mod);
+outR = inR * <span class="fn">mix</span>(dR, <span class="num">1.0</span>, mod);</pre>
+      </div>
+
+    </div>
+    <p style="margin-top:20px;color:var(--dim);font-size:0.9rem;">
+      More scripts in the <a href="https://github.com/krahd/audio_scripter/tree/main/examples">examples/ directory</a>.
+      Load any <code>.ascr</code> file directly from the plugin's Load button.
+    </p>
+  </div>
+</section>
+
+<!-- language reference -->
+<section id="reference">
+  <div class="container">
+    <h2>Language reference</h2>
+    <p style="color:var(--dim);margin-bottom:24px;">
+      For the full manual with tutorials and design patterns, see
+      <a href="LANGUAGE_SPEC_v2.md">docs/LANGUAGE_SPEC_v2.md</a>.
+    </p>
+
+    <table class="ref-table">
+      <thead>
+        <tr>
+          <th>Function / syntax</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr class="section-header"><td colspan="2">Special variables</td></tr>
+        <tr><td>inL, inR</td><td>Input samples (read-only), nominally −1.0 … 1.0</td></tr>
+        <tr><td>outL, outR</td><td>Output samples — default to inL/inR each sample</td></tr>
+        <tr><td>sr</td><td>Sample rate in Hz</td></tr>
+        <tr><td>t</td><td>Elapsed time in seconds</td></tr>
+        <tr><td>p1 … p8</td><td>Macro knobs, 0.0 – 1.0, DAW-automatable</td></tr>
+        <tr><td>state_*</td><td>Any variable whose name starts with <code>state_</code> persists across samples</td></tr>
+
+        <tr class="section-header"><td colspan="2">Control flow</td></tr>
+        <tr><td>if (c) { } else { }</td><td>Conditional — non-zero is truthy</td></tr>
+        <tr><td>while (c) { }</td><td>Loop while condition is non-zero</td></tr>
+        <tr><td>for (i=s; end) { }</td><td>Legacy for: i steps by 1 while i &lt; end</td></tr>
+        <tr><td>for (i=s; cond; step) { }</td><td>Extended for: explicit condition and step expression</td></tr>
+        <tr><td>break; / continue;</td><td>Exit or skip in the innermost loop</td></tr>
+        <tr><td>fn name(a, b) { return x; }</td><td>User-defined function</td></tr>
+
+        <tr class="section-header"><td colspan="2">Math</td></tr>
+        <tr><td>sin(x), cos(x), tan(x)</td><td>Trigonometric (radians)</td></tr>
+        <tr><td>abs(x), sqrt(x)</td><td>Absolute value, square root</td></tr>
+        <tr><td>exp(x), log(x)</td><td>Exponential, natural log</td></tr>
+        <tr><td>tanh(x)</td><td>Smooth clipper, output in (−1, 1)</td></tr>
+        <tr><td>pow(a, b)</td><td>a to the power b</td></tr>
+        <tr><td>min(a, b), max(a, b)</td><td>Smaller / larger of two values</td></tr>
+
+        <tr class="section-header"><td colspan="2">Shaping</td></tr>
+        <tr><td>clamp(x, lo, hi)</td><td>Hard-limit to [lo, hi] — also aliased as clip</td></tr>
+        <tr><td>mix(a, b, t)</td><td>Linear interpolation: a + (b−a)·t</td></tr>
+        <tr><td>wrap(x, lo, hi)</td><td>Cyclic wrap inside [lo, hi]</td></tr>
+        <tr><td>fold(x, lo, hi)</td><td>Fold back at boundaries (wavefolder)</td></tr>
+        <tr><td>crush(x, steps)</td><td>Quantise to N amplitude levels</td></tr>
+        <tr><td>smoothstep(e0, e1, x)</td><td>Smooth 0→1 S-curve between e0 and e1</td></tr>
+
+        <tr class="section-header"><td colspan="2">Oscillators &amp; noise</td></tr>
+        <tr><td>noise(seed)</td><td>Deterministic hash noise, output in (−1, 1)</td></tr>
+        <tr><td>pulse(hz, duty)</td><td>Square wave — 1.0 while phase &lt; duty, else 0.0</td></tr>
+
+        <tr class="section-header"><td colspan="2">Filters (optional id selects independent state lane)</td></tr>
+        <tr><td>lpf1(x, coeff [, id])</td><td>One-pole low-pass filter</td></tr>
+        <tr><td>hp1(x, coeff [, id])</td><td>One-pole high-pass filter</td></tr>
+        <tr><td>bp1(x, hpC, lpC [, id])</td><td>Band-pass: hp1 → lpf1 in series</td></tr>
+        <tr><td>svf(x, cut, q, mode [, id])</td><td>State-variable filter: mode 0=LP, 1=BP, 2=HP</td></tr>
+        <tr><td>slew(target, speed [, id])</td><td>Slew-rate limiter — max change per sample</td></tr>
+        <tr><td>env(x, atk, rel [, id])</td><td>Envelope follower with asymmetric smoothing</td></tr>
+
+        <tr class="section-header"><td colspan="2">Delay &amp; saturation</td></tr>
+        <tr><td>delay(x, samples [, id])</td><td>Delay line — 1–96000 samples per lane</td></tr>
+        <tr><td>sat(x, drive [, mode])</td><td>Soft-clipper: mode 0=tanh, 1=atan, 2=cubic</td></tr>
+
+        <tr class="section-header"><td colspan="2">Comparison (return 1.0 / 0.0)</td></tr>
+        <tr><td>gt(a, b), lt(a, b)</td><td>Greater-than, less-than</td></tr>
+        <tr><td>ge(a, b), le(a, b)</td><td>Greater-or-equal, less-or-equal</td></tr>
+        <tr><td>select(cond, a, b)</td><td>Returns a if cond ≠ 0, else b</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- install -->
+<section>
+  <div class="container">
+    <h2>Install &amp; build</h2>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;">
+      <div>
+        <h3>Pre-built binaries</h3>
+        <p style="color:var(--dim);font-size:0.9rem;margin-bottom:12px;">
+          Download the latest release from GitHub. Unzip and copy the bundle to your plugin folder,
+          or run the installer script:
+        </p>
+        <pre>./install.sh -b</pre>
+      </div>
+      <div>
+        <h3>Build from source</h3>
+        <p style="color:var(--dim);font-size:0.9rem;margin-bottom:12px;">
+          Requires CMake 3.22+ and a C++20 compiler. JUCE is fetched automatically.
+        </p>
+        <pre>./scripts/build_release.sh \
+  --config Release --package</pre>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="container">
+    <p>
+      audio_scripter &nbsp;·&nbsp;
+      <a href="https://github.com/krahd/audio_scripter">GitHub</a> &nbsp;·&nbsp;
+      <a href="https://github.com/krahd/audio_scripter/releases">Releases</a> &nbsp;·&nbsp;
+      <a href="LANGUAGE_SPEC_v2.md">Language manual</a> &nbsp;·&nbsp;
+      <a href="https://github.com/krahd/audio_scripter/blob/main/LICENSE">MIT License</a>
+    </p>
+  </div>
+</footer>
+
+</body>
+</html>
