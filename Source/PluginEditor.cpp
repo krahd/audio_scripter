@@ -200,6 +200,9 @@ AudioScripterAudioProcessorEditor::AudioScripterAudioProcessorEditor (AudioScrip
     websiteButton.setColour (juce::HyperlinkButton::textColourId, juce::Colour (0xff4ec9b0));
     addAndMakeVisible (websiteButton);
 
+    aboutButton.setFont (juce::FontOptions (12.0f), false, juce::Justification::centredRight);
+    aboutButton.setColour (juce::HyperlinkButton::textColourId, juce::Colour (0xff4ec9b0));
+
     // Create tokeniser + code editor with syntax colouring and line numbers
     codeTokeniser = std::make_unique<ScriptCodeTokeniser>();
     scriptEditor = std::make_unique<juce::CodeEditorComponent> (codeDocument, codeTokeniser.get());
@@ -346,8 +349,8 @@ void AudioScripterAudioProcessorEditor::resized()
     auto area = getLocalBounds().reduced (10);
     auto titleRow = area.removeFromTop (30);
     websiteButton.setBounds (titleRow.removeFromRight (240));
-    aboutButton.setBounds (titleRow.removeFromRight (64));
     titleRow.removeFromRight (8);
+    aboutButton.setBounds (titleRow.removeFromRight (60));
     titleLabel.setBounds (titleRow);
 
     auto controls = area.removeFromTop (30);

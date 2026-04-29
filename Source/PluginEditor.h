@@ -40,7 +40,7 @@ private:
     juce::TextButton applyButton { "Apply" };
     juce::TextButton saveButton { "Save" };
     juce::TextButton loadButton { "Load" };
-    juce::TextButton aboutButton { "About" };
+    juce::HyperlinkButton aboutButton { "About", juce::URL() };
     juce::TextButton defaultsButton { "Defaults" };
     juce::ComboBox examplesBox;
     std::vector<juce::File> exampleFiles;
