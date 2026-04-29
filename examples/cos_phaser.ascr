@@ -1,20 +1,24 @@
-#@p1: Macro1
-#@p2: Macro2
-#@p3: Macro3
-#@p4: Macro4
-# p1 = 0.65
-# p2 = 0.5
-# p3 = 0.8
-# p4 = 0.5
-# Cosine-swept resonant comb: cos LFO drives filter coefficient for phaser-like sweeps
-# p1 = sweep speed, p2 = sweep depth, p3 = resonance feedback, p4 = dry/wet
+#@p1: Rate
+#@p2: Depth
+#@p3: Color
+#@p4: Wet
+# p1 = 0.35
+# p2 = 0.55
+# p3 = 0.45
+# p4 = 0.8
+# LFO-swept comb filter: cos LFO sweeps a notch for phaser-like sweeps
+# Notch = input minus filtered signal; color adds mild resonance peak
+# p1 = sweep speed, p2 = sweep depth, p3 = color, p4 = wet
 dt = 1.0 / sr;
 state_lfoPhase = wrap(state_lfoPhase + (0.1 + p1 * 4.9) * dt, 0.0, 1.0);
 sweep = 0.5 + 0.5 * cos(6.2831853 * state_lfoPhase);
 coeff = 0.003 + sweep * p2 * 0.18;
-resL = lpf1(inL + state_resL * p3 * 0.9, coeff, 0);
-resR = lpf1(inR + state_resR * p3 * 0.9, coeff, 1);
-state_resL = resL;
-state_resR = resR;
-outL = mix(inL, resL, p4);
-outR = mix(inR, resR, p4);
+res = p3 * 0.4;
+filtL = lpf1(inL + state_resL * res, coeff, 0);
+filtR = lpf1(inR + state_resR * res, coeff, 1);
+state_resL = clamp(filtL, -1.5, 1.5);
+state_resR = clamp(filtR, -1.5, 1.5);
+combL = inL - filtL * (0.5 + res * 0.5);
+combR = inR - filtR * (0.5 + res * 0.5);
+outL = mix(inL, combL, p4);
+outR = mix(inR, combR, p4);

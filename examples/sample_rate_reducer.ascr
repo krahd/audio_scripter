@@ -1,5 +1,5 @@
-#@p1: Macro1
-#@p2: Macro2
+#@p1: Reduction
+#@p2: Wet
 # p1 = 0.62
 # p2 = 0.56
 # Sample-rate reduction with post-smoothing and wet control for less brittle top-end

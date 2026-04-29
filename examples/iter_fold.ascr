@@ -1,6 +1,6 @@
-#@p1: Macro1
-#@p2: Macro2
-#@p3: Macro3
+#@p1: Drive
+#@p2: Iterations
+#@p3: Wet
 # p1 = 0.62
 # p2 = 0.55
 # p3 = 0.82

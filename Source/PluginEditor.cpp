@@ -235,10 +235,12 @@ AudioScripterAudioProcessorEditor::AudioScripterAudioProcessorEditor (AudioScrip
     saveButton.addListener (this);
     loadButton.addListener (this);
     aboutButton.addListener (this);
+    defaultsButton.addListener (this);
     addAndMakeVisible (applyButton);
     addAndMakeVisible (saveButton);
     addAndMakeVisible (loadButton);
     addAndMakeVisible (aboutButton);
+    addAndMakeVisible (defaultsButton);
 
     examplesBox.addListener (this);
     examplesBox.addItem ("Select example...", 1);
@@ -324,6 +326,7 @@ AudioScripterAudioProcessorEditor::~AudioScripterAudioProcessorEditor()
     saveButton.removeListener (this);
     loadButton.removeListener (this);
     aboutButton.removeListener (this);
+    defaultsButton.removeListener (this);
     examplesBox.removeListener (this);
 }
 
@@ -343,16 +346,19 @@ void AudioScripterAudioProcessorEditor::resized()
     auto area = getLocalBounds().reduced (10);
     auto titleRow = area.removeFromTop (30);
     websiteButton.setBounds (titleRow.removeFromRight (240));
+    aboutButton.setBounds (titleRow.removeFromRight (64));
+    titleRow.removeFromRight (8);
     titleLabel.setBounds (titleRow);
 
     auto controls = area.removeFromTop (30);
-    applyButton.setBounds (controls.removeFromLeft (80));
     saveButton.setBounds (controls.removeFromLeft (80));
     loadButton.setBounds (controls.removeFromLeft (80));
     controls.removeFromLeft (10);
     examplesBox.setBounds (controls.removeFromLeft (240));
     controls.removeFromLeft (10);
-    aboutButton.setBounds (controls.removeFromLeft (64));
+    applyButton.setBounds (controls.removeFromLeft (80));
+    controls.removeFromLeft (10);
+    defaultsButton.setBounds (controls.removeFromLeft (80));
 
     area.removeFromTop (8);
 
@@ -395,6 +401,8 @@ void AudioScripterAudioProcessorEditor::buttonClicked (juce::Button* b)
         loadScriptFromFile();
     else if (b == &aboutButton)
         showAboutBox();
+    else if (b == &defaultsButton)
+        applyScriptMetadata();
 }
 
 void AudioScripterAudioProcessorEditor::comboBoxChanged (juce::ComboBox* box)

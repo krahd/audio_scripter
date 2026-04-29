@@ -1,6 +1,6 @@
-#@p1: Macro1
-#@p2: Macro2
-#@p3: Macro3
+#@p1: Tempo
+#@p2: Texture
+#@p3: Smooth
 # p1 = 0.52
 # p2 = 0.36
 # p3 = 0.67

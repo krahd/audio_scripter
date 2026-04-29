@@ -1,5 +1,5 @@
-#@p1: Macro1
-#@p2: Macro2
+#@p1: Width
+#@p2: Side Drive
 # p1 = 0.65
 # p2 = 0.5
 # Mid/Side stereo width control with optional side channel saturation

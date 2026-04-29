@@ -1,18 +1,25 @@
-#@p1: Macro1
-#@p2: Macro2
-#@p3: Macro3
-# p1 = 0.65
-# p2 = 0.5
-# p3 = 0.8
-# Additive synthesis: square wave from sum of odd Fourier harmonics via for loop
-# p1 = base frequency (40–1000 Hz), p2 = harmonic count (1–16), p3 = dry/wet
-freq = 40.0 + p1 * 960.0;
-n = 1.0 + p2 * 15.0;
-sum = 0.0;
+#@p1: Frequency
+#@p2: Harmonics
+#@p3: Wet
+# p1 = 0.25
+# p2 = 0.45
+# p3 = 0.75
+# Square-wave ring modulator: odd-harmonic carrier drives amplitude modulation of input
+# Nyquist guard skips harmonics that would alias above sr/2
+# p1 = carrier frequency (40–300 Hz), p2 = harmonic count (1–8), p3 = wet
+freq = 40.0 + p1 * 260.0;
+nyq = sr * 0.45;
+n = 1.0 + p2 * 7.0;
+mod = 0.0;
+norm = 0.0;
 for (k = 0; n) {
     h = 2.0 * k + 1.0;
-    sum = sum + sin(6.2831853 * freq * h * t) / h;
+    hf = freq * h;
+    if (lt(hf, nyq)) {
+        mod = mod + sin(6.2831853 * hf * t) / h;
+        norm = norm + 1.0 / h;
+    }
 }
-sig = sum * 0.3;
-outL = mix(inL, sig, p3);
-outR = mix(inR, sig, p3);
+carrier = select(gt(norm, 0.0), mod / norm, 0.0);
+outL = mix(inL, inL * carrier, p3);
+outR = mix(inR, inR * carrier, p3);

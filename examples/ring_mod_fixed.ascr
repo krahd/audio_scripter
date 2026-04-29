@@ -1,6 +1,6 @@
-#@p1: Macro1
-#@p2: Macro2
-#@p3: Macro3
+#@p1: Carrier Hz
+#@p2: Spread
+#@p3: Wet
 # p1 = 0.48
 # p2 = 0.33
 # p3 = 0.72

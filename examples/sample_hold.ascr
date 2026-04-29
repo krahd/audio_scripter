@@ -1,5 +1,5 @@
-#@p1: Macro1
-#@p2: Macro2
+#@p1: Rate
+#@p2: Wet
 # p1 = 0.58
 # p2 = 0.62
 # Sample-and-hold with slew-smoothed transitions to reduce zipper/click artifacts

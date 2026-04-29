@@ -1,6 +1,6 @@
-#@p1: Macro1
-#@p2: Macro2
-#@p3: Macro3
+#@p1: Rate
+#@p2: Depth
+#@p3: Wet
 # p1 = 0.65
 # p2 = 0.5
 # p3 = 0.8

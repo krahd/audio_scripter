@@ -552,35 +552,46 @@ outR = inR * mix(depthR, 1.0, mod);
 juce::String helpText()
 {
     return juce::String::fromUTF8(R"(
-  audio_scripter 1.1.0  —  https://krahd.github.io/audio_scripter/
+        
+audio_scripter 1.1.0  —  https://krahd.github.io/audio_scripter/
+----------------------------------------------------------------
 
 OVERVIEW
+
   The script runs once per audio sample, top to bottom.
   Assign outL and outR to produce output (they default to inL, inR).
 
   x = expression;        assignment — must end with ;
   # comment              everything after # is ignored
 
+
 SPECIAL VARIABLES  (read-only except outL / outR)
+
   inL, inR    current input sample (-1.0 to 1.0)
   outL, outR  output sample (pre-set to inL, inR each sample)
   sr          sample rate in Hz  (e.g. 44100.0)
   t           elapsed time in seconds, grows continuously
   p1 .. p8    macro knobs, always in range 0.0 – 1.0, automatable
 
+
 STATE VARIABLES
+
   Any variable whose name starts with state_ persists between samples.
   Use them to build oscillators, filters, envelope followers, etc.
 
     state_phase = wrap(state_phase + 440.0 / sr, 0.0, 1.0);
     tone = sin(6.2831853 * state_phase);
 
+
 OPERATORS
+
   +  -  *  /           arithmetic (/ returns 0 when divisor is 0)
   -x                   unary minus
   true  false          boolean literals (1.0 / 0.0)
 
+
 CONTROL FLOW
+
   if (condition) { ... } else { ... }
   while (condition) { ... }
   for (i = 0; 8) { ... }          i iterates 0, 1 … 7 (legacy step-by-1 form)
@@ -591,7 +602,9 @@ CONTROL FLOW
 
   Note: use gt/lt/ge/le/select for comparisons — < > == are not operators.
 
+
 MATH FUNCTIONS
+
   sin(x)          sine; x in radians  (2*pi = 6.2831853)
   cos(x)          cosine
   tan(x)          tangent — clips very sharply near ±pi/2
@@ -604,7 +617,9 @@ MATH FUNCTIONS
   min(a, b)       smaller of two values
   max(a, b)       larger of two values
 
+
 SHAPING FUNCTIONS
+
   clamp(x, lo, hi)        hard-limit x to [lo, hi]
   clip(x, lo, hi)         alias for clamp
   mix(a, b, t)            linear interpolate: a + (b - a) * t
@@ -613,7 +628,9 @@ SHAPING FUNCTIONS
   crush(x, steps)         quantise to N amplitude levels (bit-crusher)
   smoothstep(e0, e1, x)   smooth 0->1 S-curve between e0 and e1
 
+
 DSP / CREATIVE FUNCTIONS
+
   noise(seed)             deterministic hash noise, output in (-1, 1)
                           use noise(t * sr) for per-sample white noise
 
@@ -653,14 +670,18 @@ DSP / CREATIVE FUNCTIONS
                           drive >= 0 (0 = unity, higher = more clip)
                           mode: 0=tanh (default)  1=atan  2=cubic
 
+
 COMPARISON / LOGIC  (return 1.0 for true, 0.0 for false)
+
   gt(a, b)        1.0 if a > b
   lt(a, b)        1.0 if a < b
   ge(a, b)        1.0 if a >= b
   le(a, b)        1.0 if a <= b
   select(c, a, b) returns a if c != 0, else b
 
+
 QUICK RECIPES
+
   # Sine oscillator via phase accumulator
   state_ph = wrap(state_ph + 440.0 / sr, 0.0, 1.0);
   outL = sin(6.2831853 * state_ph);  outR = outL;

@@ -1,6 +1,6 @@
-#@p1: Macro1
-#@p2: Macro2
-#@p3: Macro3
+#@p1: Cutoff
+#@p2: Resonance
+#@p3: Wet
 # p1 = 0.64
 # p2 = 0.44
 # p3 = 0.78

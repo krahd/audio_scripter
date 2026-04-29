@@ -1,7 +1,7 @@
-#@p1: Macro1
-#@p2: Macro2
-#@p3: Macro3
-#@p4: Macro4
+#@p1: Drive
+#@p2: Fold
+#@p3: Bit Depth
+#@p4: Wet
 # p1 = 0.65
 # p2 = 0.5
 # p3 = 0.8

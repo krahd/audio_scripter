@@ -1,6 +1,6 @@
-#@p1: Macro1
-#@p2: Macro2
-#@p3: Macro3
+#@p1: Rate
+#@p2: Depth
+#@p3: Shape
 # p1 = 0.57
 # p2 = 0.52
 # p3 = 0.38
