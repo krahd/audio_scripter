@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.0.8 - 2026-04-29
+
+### Added
+- Reset project versioning to pre-1.0: `0.0.8` to reflect early-stage API.
+
+### Notes
+- A previous release tag `v1.0.8` was published in error and has been deleted. The repository now uses `0.x` pre-1.0 versioning.
+
 ## 1.1.0 - 2026-04-28
 
 ### Added

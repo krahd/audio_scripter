@@ -1,4 +1,4 @@
-# audio_scripter 1.1.0
+# audio_scripter 0.0.8
 
 audio_scripter is a JUCE-based, real-time scriptable audio effect plugin (VST3, AU, Standalone).
 
@@ -76,8 +76,8 @@ A CI workflow (`.github/workflows/ci.yml`) runs the script validator and parser 
 A release workflow (`.github/workflows/release.yml`) builds macOS and Windows artifacts and publishes a GitHub Release when you push a `v*` tag:
 
 ```bash
-git tag v1.1.0
-git push origin v1.1.0
+git tag v0.0.8
+git push origin v0.0.8
 ```
 
 ## Examples
