@@ -75,7 +75,8 @@ if (AUDIO_SCRIPTER_BUILD_TESTS)
   add_executable(audio_scripter_parser_tests
     tests/ScriptParserTests.cpp
     Source/ScriptParser.cpp
-    Source/ScriptTokenizer.cpp)
+    Source/ScriptTokenizer.cpp
+    Source/ScriptEngine.cpp)
 
   target_include_directories(audio_scripter_parser_tests PRIVATE Source)
 
@@ -84,6 +85,7 @@ if (AUDIO_SCRIPTER_BUILD_TESTS)
     JUCE_USE_CURL=0)
 
   target_link_libraries(audio_scripter_parser_tests PRIVATE
+    juce::juce_audio_basics
     juce::juce_core
     juce::juce_recommended_config_flags
     juce::juce_recommended_lto_flags

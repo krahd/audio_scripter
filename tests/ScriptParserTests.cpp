@@ -1,5 +1,7 @@
 #include "ScriptParser.h"
+#include "ScriptEngine.h"
 
+#include <cmath>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -129,9 +131,239 @@ outR = inR * state_gain;
 
     return 0;
 }
+
+int runEngineTests()
+{
+    // --- gain: output must be 2× input ---
+    {
+        scripting::ScriptEngine engine;
+        engine.reset (44100.0);
+        auto r = engine.compileAndInstall ("outL = inL * 2.0; outR = inR * 2.0;");
+        if (! r.ok)
+        {
+            std::cerr << "Engine gain test: compile failed.\n";
+            return 1;
+        }
+
+        juce::AudioBuffer<float> buf (2, 64);
+        for (int s = 0; s < 64; ++s)
+        {
+            buf.setSample (0, s, 0.5f);
+            buf.setSample (1, s, -0.25f);
+        }
+        std::array<float, 8> macros {};
+        engine.processBlock (buf, macros);
+
+        for (int s = 0; s < 64; ++s)
+        {
+            if (std::abs (buf.getSample (0, s) - 1.0f) > 1e-5f ||
+                std::abs (buf.getSample (1, s) - (-0.5f)) > 1e-5f)
+            {
+                std::cerr << "Engine gain test: wrong output at sample " << s << ": "
+                          << buf.getSample (0, s) << " " << buf.getSample (1, s) << "\n";
+                return 1;
+            }
+        }
+    }
+
+    // --- silence: outL/outR assignment to 0 produces silence ---
+    {
+        scripting::ScriptEngine engine;
+        engine.reset (44100.0);
+        auto r = engine.compileAndInstall ("outL = 0.0; outR = 0.0;");
+        if (! r.ok)
+        {
+            std::cerr << "Engine silence test: compile failed.\n";
+            return 1;
+        }
+
+        juce::AudioBuffer<float> buf (2, 64);
+        for (int s = 0; s < 64; ++s)
+        {
+            buf.setSample (0, s, 0.8f);
+            buf.setSample (1, s, -0.6f);
+        }
+        std::array<float, 8> macros {};
+        engine.processBlock (buf, macros);
+
+        for (int s = 0; s < 64; ++s)
+        {
+            if (std::abs (buf.getSample (0, s)) > 1e-5f || std::abs (buf.getSample (1, s)) > 1e-5f)
+            {
+                std::cerr << "Engine silence test: expected zero output at sample " << s << "\n";
+                return 1;
+            }
+        }
+    }
+
+    // --- tanh: drive=2 → tanh(2)≈0.964, clearly below linear amp and below 1.0 ---
+    {
+        scripting::ScriptEngine engine;
+        engine.reset (44100.0);
+        // tanh(inL * 2.0): input 1.0 → tanh(2.0) ≈ 0.9640, not 2.0 and not 1.0
+        auto r = engine.compileAndInstall ("outL = tanh(inL * 2.0); outR = tanh(inR * 2.0);");
+        if (! r.ok)
+        {
+            std::cerr << "Engine tanh test: compile failed.\n";
+            return 1;
+        }
+
+        juce::AudioBuffer<float> buf (2, 2);
+        buf.setSample (0, 0,  1.0f); buf.setSample (1, 0,  1.0f);
+        buf.setSample (0, 1, -1.0f); buf.setSample (1, 1, -1.0f);
+
+        std::array<float, 8> macros {};
+        engine.processBlock (buf, macros);
+
+        // Output must be less than linear (2.0) and strictly less than 1.0
+        const float out0 = buf.getSample (0, 0);
+        if (out0 >= 1.0f || out0 < 0.9f)
+        {
+            std::cerr << "Engine tanh test: expected output in [0.9, 1.0), got " << out0 << "\n";
+            return 1;
+        }
+        // Negative half must be symmetric
+        if (std::abs (buf.getSample (0, 1) + out0) > 1e-4f)
+        {
+            std::cerr << "Engine tanh test: tanh not symmetric\n";
+            return 1;
+        }
+    }
+
+    // --- delay: 1-sample delay shifts signal by one sample ---
+    {
+        scripting::ScriptEngine engine;
+        engine.reset (44100.0);
+        auto r = engine.compileAndInstall ("outL = delay(inL, 1, 0); outR = delay(inR, 1, 1);");
+        if (! r.ok)
+        {
+            std::cerr << "Engine delay test: compile failed.\n";
+            return 1;
+        }
+
+        juce::AudioBuffer<float> buf (2, 3);
+        buf.setSample (0, 0, 0.5f);  buf.setSample (1, 0, -0.3f);
+        buf.setSample (0, 1, 0.0f);  buf.setSample (1, 1, 0.0f);
+        buf.setSample (0, 2, 0.0f);  buf.setSample (1, 2, 0.0f);
+
+        std::array<float, 8> macros {};
+        engine.processBlock (buf, macros);
+
+        if (std::abs (buf.getSample (0, 0)) > 1e-5f)
+        {
+            std::cerr << "Engine delay test: first sample should be 0 (buffer cold), got "
+                      << buf.getSample (0, 0) << "\n";
+            return 1;
+        }
+        if (std::abs (buf.getSample (0, 1) - 0.5f) > 1e-4f)
+        {
+            std::cerr << "Engine delay test: second sample should be 0.5 (delayed), got "
+                      << buf.getSample (0, 1) << "\n";
+            return 1;
+        }
+    }
+
+    // --- lpf1: a one-pole low-pass smooths a step from 0 to 1 ---
+    {
+        scripting::ScriptEngine engine;
+        engine.reset (44100.0);
+        // coeff = 0.5 → half-way each sample; 8 samples should be well above 0
+        auto r = engine.compileAndInstall ("outL = lpf1(inL, 0.5, 0); outR = outL;");
+        if (! r.ok)
+        {
+            std::cerr << "Engine lpf1 test: compile failed.\n";
+            return 1;
+        }
+
+        juce::AudioBuffer<float> buf (2, 8);
+        for (int s = 0; s < 8; ++s)
+            buf.setSample (0, s, 1.0f);
+        buf.setSample (1, 0, 1.0f);
+
+        std::array<float, 8> macros {};
+        engine.processBlock (buf, macros);
+
+        // After 1 sample: 0.5. After 8 samples: 1-(0.5^8)≈0.996. Must be rising.
+        if (buf.getSample (0, 0) >= buf.getSample (0, 7) || buf.getSample (0, 0) <= 0.0f)
+        {
+            std::cerr << "Engine lpf1 test: expected rising ramp, got "
+                      << buf.getSample (0, 0) << " → " << buf.getSample (0, 7) << "\n";
+            return 1;
+        }
+        if (buf.getSample (0, 7) < 0.99f)
+        {
+            std::cerr << "Engine lpf1 test: after 8 samples value should be near 1, got "
+                      << buf.getSample (0, 7) << "\n";
+            return 1;
+        }
+    }
+
+    // --- example scripts: compile, execute without crash, produce output ---
+#if defined(EXAMPLES_DIR)
+    const std::filesystem::path examplesDir = std::filesystem::path (EXAMPLES_DIR);
+#else
+    const std::filesystem::path examplesDir = std::filesystem::path ("examples");
+#endif
+
+    if (std::filesystem::exists (examplesDir))
+    {
+        for (const auto& entry : std::filesystem::directory_iterator (examplesDir))
+        {
+            if (entry.path().extension() != ".ascr")
+                continue;
+
+            std::ifstream in (entry.path());
+            std::stringstream sbuf;
+            sbuf << in.rdbuf();
+            const std::string src = sbuf.str();
+
+            scripting::ScriptEngine engine;
+            engine.reset (44100.0);
+            auto r = engine.compileAndInstall (juce::String (src));
+            if (! r.ok)
+            {
+                std::cerr << "Engine example test: compile failed for "
+                          << entry.path().filename().string() << "\n"
+                          << r.errors.joinIntoString ("\n") << "\n";
+                return 1;
+            }
+
+            // Feed 512 samples of a 440 Hz sine wave at -12 dBFS
+            constexpr int kN = 512;
+            constexpr float kAmp = 0.25f;
+            juce::AudioBuffer<float> buf (2, kN);
+            for (int s = 0; s < kN; ++s)
+            {
+                const float v = kAmp * std::sin (2.0f * 3.14159265f * 440.0f * (float) s / 44100.0f);
+                buf.setSample (0, s, v);
+                buf.setSample (1, s, v);
+            }
+
+            std::array<float, 8> macros {};
+            macros[0] = 0.5f; macros[1] = 0.5f; macros[2] = 0.5f;
+
+            engine.processBlock (buf, macros);
+
+            // Verify no NaN/Inf in output
+            for (int s = 0; s < kN; ++s)
+            {
+                if (! std::isfinite (buf.getSample (0, s)) || ! std::isfinite (buf.getSample (1, s)))
+                {
+                    std::cerr << "Engine example test: NaN/Inf output in "
+                              << entry.path().filename().string() << " at sample " << s << "\n";
+                    return 1;
+                }
+            }
+        }
+    }
+
+    return 0;
+}
 }
 
 int main()
 {
-    return run();
+    if (int r = run(); r != 0)
+        return r;
+    return runEngineTests();
 }

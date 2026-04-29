@@ -25,6 +25,7 @@ private:
     void saveScriptToFile();
     void loadScriptFromFile();
     void showAboutBox();
+    void appendToLog (const juce::String& message, juce::Colour colour = juce::Colours::lightgreen);
 
     AudioScripterAudioProcessor& processor;
 

@@ -229,10 +229,10 @@ AudioScripterAudioProcessorEditor::AudioScripterAudioProcessorEditor (AudioScrip
 
     outputPanel.setMultiLine (true);
     outputPanel.setReadOnly (true);
+    outputPanel.setScrollbarsShown (true);
     outputPanel.setColour (juce::TextEditor::backgroundColourId, juce::Colours::black.withAlpha (0.45f));
-    outputPanel.setColour (juce::TextEditor::textColourId, juce::Colours::lightgreen);
-    outputPanel.setText ("Ready. p1..p8 macros are available in scripts and can be automated from your DAW.");
     addAndMakeVisible (outputPanel);
+    appendToLog ("Ready. p1..p8 macros are available in scripts and can be automated from your DAW.");
 
     applyButton.addListener (this);
     saveButton.addListener (this);
@@ -423,7 +423,7 @@ void AudioScripterAudioProcessorEditor::comboBoxChanged (juce::ComboBox* box)
         if (file.existsAsFile())
         {
             scriptEditor->loadContent (loadTextFileFixEncoding (file));
-            applyScriptMetadata();
+            applyScript();
         }
         return;
     }
@@ -433,7 +433,7 @@ void AudioScripterAudioProcessorEditor::comboBoxChanged (juce::ComboBox* box)
     if (fallbackIdx >= 0)
     {
         scriptEditor->loadContent (scripting::exampleScript (fallbackIdx));
-        applyScriptMetadata();
+        applyScript();
     }
 }
 
@@ -444,13 +444,11 @@ void AudioScripterAudioProcessorEditor::applyScript()
 
     if (result.ok)
     {
-        outputPanel.setColour (juce::TextEditor::textColourId, juce::Colours::lightgreen);
-        outputPanel.setText ("Compiled successfully.");
+        appendToLog ("Compiled successfully.");
         return;
     }
 
-    outputPanel.setColour (juce::TextEditor::textColourId, juce::Colours::orange);
-    outputPanel.setText (result.errors.joinIntoString ("\n"));
+    appendToLog (result.errors.joinIntoString ("\n"), juce::Colours::orange);
 }
 
 void AudioScripterAudioProcessorEditor::applyScriptMetadata()
@@ -488,15 +486,9 @@ void AudioScripterAudioProcessorEditor::saveScriptToFile()
             juce::MessageManager::callAsync ([this, ok, file]
             {
                 if (ok)
-                {
-                    outputPanel.setColour (juce::TextEditor::textColourId, juce::Colours::lightgreen);
-                    outputPanel.setText ("Saved script to: " + file.getFullPathName());
-                }
+                    appendToLog ("Saved: " + file.getFullPathName());
                 else
-                {
-                    outputPanel.setColour (juce::TextEditor::textColourId, juce::Colours::red);
-                    outputPanel.setText ("Could not save script.");
-                }
+                    appendToLog ("Could not save script.", juce::Colours::red);
             });
         });
 }
@@ -521,10 +513,19 @@ void AudioScripterAudioProcessorEditor::loadScriptFromFile()
                 if (scriptEditor)
                     scriptEditor->loadContent (text);
                 applyScriptMetadata();
-                outputPanel.setColour (juce::TextEditor::textColourId, juce::Colours::lightgreen);
-                outputPanel.setText ("Loaded: " + file.getFullPathName());
+                appendToLog ("Loaded: " + file.getFullPathName());
             });
         });
+}
+
+void AudioScripterAudioProcessorEditor::appendToLog (const juce::String& message, juce::Colour colour)
+{
+    const auto ts = juce::Time::getCurrentTime().formatted ("%H:%M:%S");
+    const auto existing = outputPanel.getText();
+    outputPanel.setColour (juce::TextEditor::textColourId, colour);
+    outputPanel.setText (existing.isEmpty() ? "[" + ts + "] " + message
+                                            : existing + "\n[" + ts + "] " + message);
+    outputPanel.moveCaretToEnd();
 }
 
 void AudioScripterAudioProcessorEditor::showAboutBox()
