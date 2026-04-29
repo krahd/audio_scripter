@@ -38,22 +38,50 @@ struct VariableExpr final : Expr
 
 struct BinaryExpr final : Expr
 {
-    enum class Op { add, sub, mul, div };
+    enum class Op { add, sub, mul, div,
+                    less, lessEqual, greater, greaterEqual, equalEqual, notEqual,
+                    logicalAnd, logicalOr,
+                    bitwiseAnd, bitwiseOr, bitwiseXor,
+                    shiftLeft, shiftRight };
 
     BinaryExpr (Op o, std::unique_ptr<Expr> l, std::unique_ptr<Expr> r)
         : op (o), left (std::move (l)), right (std::move (r)) {}
 
     float evaluate (EvalContext& ctx) const override
     {
+        // Short-circuit logical operators
+        if (op == Op::logicalAnd)
+        {
+            if (left->evaluate (ctx) == 0.0f) return 0.0f;
+            return right->evaluate (ctx) != 0.0f ? 1.0f : 0.0f;
+        }
+        if (op == Op::logicalOr)
+        {
+            if (left->evaluate (ctx) != 0.0f) return 1.0f;
+            return right->evaluate (ctx) != 0.0f ? 1.0f : 0.0f;
+        }
+
         const auto l = left->evaluate (ctx);
         const auto r = right->evaluate (ctx);
 
         switch (op)
         {
-            case Op::add: return l + r;
-            case Op::sub: return l - r;
-            case Op::mul: return l * r;
-            case Op::div: return std::abs (r) < 1.0e-9f ? 0.0f : l / r;
+            case Op::add:        return l + r;
+            case Op::sub:        return l - r;
+            case Op::mul:        return l * r;
+            case Op::div:        return std::abs (r) < 1.0e-9f ? 0.0f : l / r;
+            case Op::less:         return l <  r ? 1.0f : 0.0f;
+            case Op::lessEqual:    return l <= r ? 1.0f : 0.0f;
+            case Op::greater:      return l >  r ? 1.0f : 0.0f;
+            case Op::greaterEqual: return l >= r ? 1.0f : 0.0f;
+            case Op::equalEqual: return l == r ? 1.0f : 0.0f;
+            case Op::notEqual:   return l != r ? 1.0f : 0.0f;
+            case Op::bitwiseAnd: return (float) ((int32_t) l & (int32_t) r);
+            case Op::bitwiseOr:  return (float) ((int32_t) l | (int32_t) r);
+            case Op::bitwiseXor: return (float) ((int32_t) l ^ (int32_t) r);
+            case Op::shiftLeft:  return (float) ((int32_t) l << ((int32_t) r & 31));
+            case Op::shiftRight: return (float) ((int32_t) l >> ((int32_t) r & 31));
+            default: break;
         }
 
         return 0.0f;
@@ -68,6 +96,14 @@ struct UnaryExpr final : Expr
 {
     explicit UnaryExpr (std::unique_ptr<Expr> e) : expr (std::move (e)) {}
     float evaluate (EvalContext& ctx) const override { return -expr->evaluate (ctx); }
+
+    std::unique_ptr<Expr> expr;
+};
+
+struct UnaryNotExpr final : Expr
+{
+    explicit UnaryNotExpr (std::unique_ptr<Expr> e) : expr (std::move (e)) {}
+    float evaluate (EvalContext& ctx) const override { return expr->evaluate (ctx) != 0.0f ? 0.0f : 1.0f; }
 
     std::unique_ptr<Expr> expr;
 };
@@ -660,7 +696,176 @@ std::unique_ptr<Statement> ScriptParser::parseAssignmentOrExpr()
 
 std::unique_ptr<Expr> ScriptParser::parseExpression()
 {
-    return parseAddSub();
+    return parseLogicalOr();
+}
+
+std::unique_ptr<Expr> ScriptParser::parseLogicalOr()
+{
+    auto left = parseLogicalAnd();
+    if (left == nullptr)
+        return {};
+
+    while (peek().type == TokenType::orOr)
+    {
+        consume();
+        auto right = parseLogicalAnd();
+        if (right == nullptr)
+            return {};
+        left = std::make_unique<BinaryExpr> (BinaryExpr::Op::logicalOr, std::move (left), std::move (right));
+    }
+
+    return left;
+}
+
+std::unique_ptr<Expr> ScriptParser::parseLogicalAnd()
+{
+    auto left = parseBitwiseOr();
+    if (left == nullptr)
+        return {};
+
+    while (peek().type == TokenType::andAnd)
+    {
+        consume();
+        auto right = parseBitwiseOr();
+        if (right == nullptr)
+            return {};
+        left = std::make_unique<BinaryExpr> (BinaryExpr::Op::logicalAnd, std::move (left), std::move (right));
+    }
+
+    return left;
+}
+
+std::unique_ptr<Expr> ScriptParser::parseBitwiseOr()
+{
+    auto left = parseBitwiseXor();
+    if (left == nullptr)
+        return {};
+
+    while (peek().type == TokenType::pipe)
+    {
+        consume();
+        auto right = parseBitwiseXor();
+        if (right == nullptr)
+            return {};
+        left = std::make_unique<BinaryExpr> (BinaryExpr::Op::bitwiseOr, std::move (left), std::move (right));
+    }
+
+    return left;
+}
+
+std::unique_ptr<Expr> ScriptParser::parseBitwiseXor()
+{
+    auto left = parseBitwiseAnd();
+    if (left == nullptr)
+        return {};
+
+    while (peek().type == TokenType::caret)
+    {
+        consume();
+        auto right = parseBitwiseAnd();
+        if (right == nullptr)
+            return {};
+        left = std::make_unique<BinaryExpr> (BinaryExpr::Op::bitwiseXor, std::move (left), std::move (right));
+    }
+
+    return left;
+}
+
+std::unique_ptr<Expr> ScriptParser::parseBitwiseAnd()
+{
+    auto left = parseEquality();
+    if (left == nullptr)
+        return {};
+
+    while (peek().type == TokenType::ampersand)
+    {
+        consume();
+        auto right = parseEquality();
+        if (right == nullptr)
+            return {};
+        left = std::make_unique<BinaryExpr> (BinaryExpr::Op::bitwiseAnd, std::move (left), std::move (right));
+    }
+
+    return left;
+}
+
+std::unique_ptr<Expr> ScriptParser::parseEquality()
+{
+    auto left = parseComparison();
+    if (left == nullptr)
+        return {};
+
+    while (true)
+    {
+        const auto token = peek();
+        if (token.type != TokenType::equalEqual && token.type != TokenType::notEqual)
+            break;
+
+        consume();
+        auto right = parseComparison();
+        if (right == nullptr)
+            return {};
+
+        const auto op = token.type == TokenType::equalEqual ? BinaryExpr::Op::equalEqual
+                                                             : BinaryExpr::Op::notEqual;
+        left = std::make_unique<BinaryExpr> (op, std::move (left), std::move (right));
+    }
+
+    return left;
+}
+
+std::unique_ptr<Expr> ScriptParser::parseComparison()
+{
+    auto left = parseShift();
+    if (left == nullptr)
+        return {};
+
+    while (true)
+    {
+        const auto token = peek();
+        if (token.type != TokenType::less && token.type != TokenType::lessEqual
+         && token.type != TokenType::greater && token.type != TokenType::greaterEqual)
+            break;
+
+        consume();
+        auto right = parseShift();
+        if (right == nullptr)
+            return {};
+
+        BinaryExpr::Op op;
+        if      (token.type == TokenType::less)         op = BinaryExpr::Op::less;
+        else if (token.type == TokenType::lessEqual)    op = BinaryExpr::Op::lessEqual;
+        else if (token.type == TokenType::greater)      op = BinaryExpr::Op::greater;
+        else                                            op = BinaryExpr::Op::greaterEqual;
+        left = std::make_unique<BinaryExpr> (op, std::move (left), std::move (right));
+    }
+
+    return left;
+}
+
+std::unique_ptr<Expr> ScriptParser::parseShift()
+{
+    auto left = parseAddSub();
+    if (left == nullptr)
+        return {};
+
+    while (true)
+    {
+        const auto token = peek();
+        if (token.type != TokenType::shiftLeft && token.type != TokenType::shiftRight)
+            break;
+
+        consume();
+        auto right = parseAddSub();
+        if (right == nullptr)
+            return {};
+
+        const auto op = token.type == TokenType::shiftLeft ? BinaryExpr::Op::shiftLeft
+                                                           : BinaryExpr::Op::shiftRight;
+        left = std::make_unique<BinaryExpr> (op, std::move (left), std::move (right));
+    }
+
+    return left;
 }
 
 std::unique_ptr<Expr> ScriptParser::parseAddSub()
@@ -723,6 +928,16 @@ std::unique_ptr<Expr> ScriptParser::parseUnary()
             return {};
 
         return std::make_unique<UnaryExpr> (std::move (expr));
+    }
+
+    if (peek().type == TokenType::notOp)
+    {
+        consume();
+        auto expr = parseUnary();
+        if (expr == nullptr)
+            return {};
+
+        return std::make_unique<UnaryNotExpr> (std::move (expr));
     }
 
     return parsePrimary();

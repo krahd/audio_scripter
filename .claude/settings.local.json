@@ -12,7 +12,12 @@
       "Bash(git add *)",
       "Bash(git commit -m ' *)",
       "Bash(git push *)",
-      "Bash(echo \"Exit: $?\")"
+      "Bash(echo \"Exit: $?\")",
+      "Bash(git remote *)",
+      "Bash(git rm *)",
+      "Bash(gh api *)",
+      "Bash(git commit -m 'Rename LANGUAGE_SPEC_v2 to LANGUAGE_SPEC, remove old version *)",
+      "Bash(git commit -m 'Add About dialog with website link *)"
     ]
   }
 }

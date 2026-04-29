@@ -561,7 +561,7 @@ juce::String helpText()
 {
     return juce::String::fromUTF8(R"(
         
-audio_scripter 1.1.0  —  https://krahd.github.io/audio_scripter/
+audio_scripter 0.0.8  —  https://krahd.github.io/audio_scripter/
 ----------------------------------------------------------------
 
 OVERVIEW
@@ -594,7 +594,11 @@ STATE VARIABLES
 OPERATORS
 
   +  -  *  /           arithmetic (/ returns 0 when divisor is 0)
-  -x                   unary minus
+  -x  !x               unary minus / logical NOT
+  <  <=  >  >=  ==  !=  comparison  (result: 1.0 true, 0.0 false)
+  &&  ||               logical AND / OR  (short-circuit)
+  &  |  ^              bitwise AND / OR / XOR
+  <<  >>               bitwise left / right shift
   true  false          boolean literals (1.0 / 0.0)
 
 
@@ -603,12 +607,10 @@ CONTROL FLOW
   if (condition) { ... } else { ... }
   while (condition) { ... }
   for (i = 0; 8) { ... }          i iterates 0, 1 … 7 (legacy step-by-1 form)
-  for (i = 0; lt(i,8); 1) { ... } extended form: condition and step are exprs
+  for (i = 0; i < 8; 1) { ... }   extended form: condition and step are exprs
   break;                           exit the innermost loop immediately
   continue;                        skip to the next iteration of the innermost loop
   fn name(a, b) { return a + b; }
-
-  Note: use gt/lt/ge/le/select for comparisons — < > == are not operators.
 
 
 MATH FUNCTIONS
@@ -681,10 +683,10 @@ DSP / CREATIVE FUNCTIONS
 
 COMPARISON / LOGIC  (return 1.0 for true, 0.0 for false)
 
-  gt(a, b)        1.0 if a > b
-  lt(a, b)        1.0 if a < b
-  ge(a, b)        1.0 if a >= b
-  le(a, b)        1.0 if a <= b
+  gt(a, b)        1.0 if a > b   (same as a > b)
+  lt(a, b)        1.0 if a < b   (same as a < b)
+  ge(a, b)        1.0 if a >= b  (same as a >= b)
+  le(a, b)        1.0 if a <= b  (same as a <= b)
   select(c, a, b) returns a if c != 0, else b
 
 

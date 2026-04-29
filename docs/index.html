@@ -357,9 +357,9 @@ outR = <span class="fn">mix</span>(inR, dR, p4);</pre>
         <pre><span class="comment"># @p1: Drive  @p2: Iterations  @p3: Wet</span>
 <span class="kw">fn</span> <span class="fn">iterFold</span>(x, drv, iters) {
     y = x * drv;
-    <span class="kw">for</span> (k = <span class="num">0.0</span>; <span class="fn">lt</span>(k, <span class="num">12.0</span>); <span class="num">1.0</span>) {
+    <span class="kw">for</span> (k = <span class="num">0.0</span>; k &lt; <span class="num">12.0</span>; <span class="num">1.0</span>) {
         <span class="kw">if</span> (<span class="fn">ge</span>(k, iters)) { <span class="kw">break</span>; }
-        <span class="kw">if</span> (<span class="fn">lt</span>(<span class="fn">abs</span>(y), <span class="num">0.02</span>)) { <span class="kw">continue</span>; }
+        <span class="kw">if</span> (<span class="fn">abs</span>(y) &lt; <span class="num">0.02</span>) { <span class="kw">continue</span>; }
         y = <span class="fn">fold</span>(y, <span class="num">-1.0</span>, <span class="num">1.0</span>);
     }
     <span class="kw">return</span> y * <span class="num">0.65</span>;
@@ -456,7 +456,13 @@ outR = <span class="fn">mix</span>(inR, dL, p3);</pre>
         <tr><td>delay(x, samples [, id])</td><td>Delay line — 1–96000 samples per lane</td></tr>
         <tr><td>sat(x, drive [, mode])</td><td>Soft-clipper: mode 0=tanh, 1=atan, 2=cubic</td></tr>
 
-        <tr class="section-header"><td colspan="2">Comparison (return 1.0 / 0.0)</td></tr>
+        <tr class="section-header"><td colspan="2">Operators (arithmetic, comparison, logical, bitwise)</td></tr>
+        <tr><td>a + b, a - b, a * b, a / b</td><td>Arithmetic (division returns 0 when divisor ≈ 0)</td></tr>
+        <tr><td>a &lt; b, a &gt; b, a == b, a != b</td><td>Comparison — return 1.0 (true) or 0.0 (false)</td></tr>
+        <tr><td>!a, a &amp;&amp; b, a || b</td><td>Logical NOT, AND, OR — short-circuit, return 1.0/0.0</td></tr>
+        <tr><td>a &amp; b, a | b, a ^ b</td><td>Bitwise AND, OR, XOR (operands cast to int32)</td></tr>
+        <tr><td>a &lt;&lt; b, a &gt;&gt; b</td><td>Bit-shift left / arithmetic right</td></tr>
+        <tr class="section-header"><td colspan="2">Comparison functions (return 1.0 / 0.0)</td></tr>
         <tr><td>gt(a, b), lt(a, b)</td><td>Greater-than, less-than</td></tr>
         <tr><td>ge(a, b), le(a, b)</td><td>Greater-or-equal, less-or-equal</td></tr>
         <tr><td>select(cond, a, b)</td><td>Returns a if cond ≠ 0, else b</td></tr>

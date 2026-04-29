@@ -50,7 +50,7 @@ native JUCE DSP code is the right tool.
 
 ## 2. Repository layout
 
-```
+```text
 audio_scripter/
 ├── Source/
 │   ├── PluginProcessor.h/cpp   # AudioProcessor: audio thread, script engine wrapper
@@ -82,7 +82,7 @@ value in the range −1.0 to 1.0 representing instantaneous air pressure. A stan
 The plugin processes stereo audio: `inL`/`inR` (left and right input) and
 `outL`/`outR` (output). A script that writes
 
-```
+```text
 outL = inL * 0.5;
 outR = inR * 0.5;
 ```
@@ -122,7 +122,7 @@ local to the current sample and start at 0 each time.
 
 A phase-accumulator oscillator demonstrates this:
 
-```
+```text
 state_phase = wrap(state_phase + 440.0 / sr, 0.0, 1.0);
 outL = sin(6.2831853 * state_phase);
 ```
@@ -135,7 +135,7 @@ One full cycle takes 44100/440 ≈ 100 samples — exactly 440 Hz.
 A one-pole IIR (Infinite Impulse Response) filter is the simplest stateful filter.
 Its recurrence is:
 
-```
+```text
 y[n] = y[n-1] + α · (x[n] − y[n-1])
      = α · x[n]  +  (1 − α) · y[n-1]
 ```
@@ -145,13 +145,13 @@ Small α → slow response, low cutoff.
 
 The 3 dB cutoff frequency is:
 
-```
+```text
 f_c ≈ α · f_s / (2π)    (for small α)
 ```
 
 or more precisely:
 
-```
+```text
 α = 1 − exp(−2π · f_c / f_s)
 ```
 
@@ -161,7 +161,7 @@ input (`x − y`) to obtain a high-pass response.
 **Resonance** can be added by feeding the previous output back into the input before
 filtering:
 
-```
+```text
 filtL = lpf1(inL + prevOut * resonance, coeff, 0);
 prevOut = filtL;
 ```
@@ -174,7 +174,7 @@ to avoid significant clipping on hot signals.
 The SVF is a second-order filter that simultaneously produces low-pass (LP),
 band-pass (BP), and high-pass (HP) outputs from the same state. Its recurrence:
 
-```
+```text
 high[n] = x[n] − low[n-1] − Q⁻¹ · band[n-1]
 band[n] = cutoff · high[n] + band[n-1]
 low[n]  = cutoff · band[n] + low[n-1]
@@ -189,7 +189,7 @@ filter sweeps.
 A delay line stores past samples and retrieves them later. The standard implementation
 is a *ring buffer* (circular buffer):
 
-```
+```text
 buffer[writePos] = input;
 output = buffer[(writePos − delaySamples + bufferSize) % bufferSize];
 writePos = (writePos + 1) % bufferSize;
@@ -218,6 +218,7 @@ y += coeff * (|x| − y);
 - **Release** (signal falling): small coeff → slow decay
 
 Typical compressor values:
+
 - Attack: 1–10 ms → `coeff ≈ 1/(0.005 · sr)` to `1/(0.001 · sr)`
 - Release: 50–500 ms → `coeff ≈ 1/(0.05 · sr)` to `1/(0.5 · sr)`
 
@@ -228,7 +229,7 @@ For a 50 ms release at 44100 Hz: `coeff = 1 / (0.05 × 44100) ≈ 0.00045`.
 A waveshaper applies a nonlinear function `f(x)` to each sample. Common choices:
 
 | Shape | Expression | Character |
-|-------|-----------|-----------|
+| --- | --- | --- |
 | Hard clip | `clamp(x, −1, 1)` | Square-wave-like, harsh |
 | tanh | `tanh(drive · x)` | Smooth, musical |
 | atan | `(2/π) · atan(drive · x)` | Slightly brighter than tanh |
@@ -236,6 +237,87 @@ A waveshaper applies a nonlinear function `f(x)` to each sample. Common choices:
 | Fold | reflects x at boundaries | Rich, complex harmonics |
 
 Drive > 1 amplifies before clipping, increasing harmonic content.
+
+### 3.9 Modulation effects
+
+Modulation effects use a **low-frequency oscillator** (LFO) — a periodic signal below ~20 Hz — to vary some parameter of the audio signal over time.
+
+**Tremolo** modulates amplitude:
+
+```text
+y[n] = x[n] · (1 − depth + depth · LFO[n])
+```
+
+The LFO swings between 0 and 1; `depth` controls how deep the modulation goes. At `depth = 1` the signal is fully silenced at the LFO's trough; at `depth = 0.5` it dips to 50% amplitude.
+
+**Ring modulation** multiplies the signal by a carrier sine wave, replacing the original frequencies with sum and difference sidebands. For a carrier at `fc` Hz modulating a signal at `fs` Hz, the output contains `fc + fs` and `fc − fs` but not `fs` or `fc` directly. The result is an unmistakable metallic, bell-like sound:
+
+```text
+freq = 100.0 + p1 * 1900.0;
+mod = sin(6.2831853 * freq * t);
+outL = inL * mod;
+outR = inR * mod;
+```
+
+**Chorus** mixes the original signal with a copy delayed by a time that varies with an LFO (typically 5–30 ms). The beating between slightly detuned copies creates a lush, wide sound. Two instances with opposite LFO phases give stereo spread.
+
+**Flanger** is like chorus but with much shorter delays (0.5–10 ms). The interaction of the delayed copy with the original creates a comb filter whose notches sweep up and down with the LFO — a distinctive jet-like "whoosh".
+
+**Phaser** routes the signal through a chain of all-pass filters whose phase shift varies with an LFO. Mixing the phase-shifted output with the original causes certain frequencies to partially cancel, creating moving spectral notches. Unlike a flanger, a phaser's notches are not evenly spaced in frequency.
+
+### 3.10 Dynamics processing
+
+A **compressor** reduces the dynamic range of a signal. When the signal level exceeds a threshold, it is attenuated by a ratio R: every dB above the threshold is reduced to 1/R dB. For a ratio of 4:1, a signal 8 dB over the threshold is only 2 dB over the threshold after compression.
+
+In practice:
+
+1. Measure level using an envelope follower (`env`).
+2. Convert to dB: `level_dB = 20 · log₁₀(level)`.
+3. Compute the gain reduction: `reduction_dB = max(0, (level_dB − threshold) · (1 − 1/ratio))`.
+4. Convert back to linear: `gain = 10^(−reduction_dB / 20)`.
+5. Smooth the gain with a slew limiter or LP filter to avoid gain-change clicks.
+
+A **limiter** is a compressor with a very high ratio (∞:1) — the signal never exceeds the threshold. A **gate** silences audio below a threshold using the inverse logic.
+
+### 3.11 Spatial effects: delay and reverb
+
+**Delay** creates distinct echoes by mixing the original signal with a time-shifted copy. Feedback delay loops the delayed signal back into the input, producing a trail of decaying echoes:
+
+```text
+state_fb = delay(inL + state_fb * feedback, delay_samples, 0);
+```
+
+The decay time (in samples) depends on both delay length and feedback:
+`T60 ≈ −delay_samples / log₁₀(|feedback|) · 3 / sr` (time to decay by 60 dB).
+
+**Reverb** simulates the dense reflections of an acoustic space. The classic **Schroeder reverb** (1962) uses:
+
+1. Four parallel **feedback comb filters** (delay lines with gain), each with a prime-number delay length to avoid repetitive echoes.
+2. Two **all-pass diffusers** in series to smear the temporal envelope.
+
+Each comb filter produces a series of echoes; with four running in parallel at different lengths, their echoes interleave and gradually become indistinguishable from continuous noise — the characteristic sound of reverb. See `examples/reverb.ascr` for a working implementation.
+
+### 3.12 Filters in depth: biquad and the z-transform
+
+A **biquad filter** is the standard building block for second-order IIR filters. Its difference equation:
+
+```text
+y[n] = b0·x[n] + b1·x[n-1] + b2·x[n-2] − a1·y[n-1] − a2·y[n-2]
+```
+
+The coefficients `(b0, b1, b2, a1, a2)` determine the filter type (LP, HP, bandpass, notch, shelf, peak). All standard biquad types are derived from the same formula by substituting pre-computed coefficients based on `fc` (cutoff), `Q` (quality factor), and `gain` (for shelves/peaks).
+
+The **z-transform** provides a mathematical framework. Replacing each delay `x[n-k]` with `z⁻ᵏ`, the filter's transfer function is:
+
+```text
+H(z) = (b0 + b1·z⁻¹ + b2·z⁻²) / (1 + a1·z⁻¹ + a2·z⁻²)
+```
+
+The roots of the denominator are the **poles**; roots of the numerator are the **zeros**. Poles near the unit circle in the complex plane create resonance peaks; poles on or outside the unit circle cause instability.
+
+The frequency response is `H(e^{jω})` evaluated on the unit circle. A low-pass biquad has two poles near `e^{j·ωc}` (the cutoff angle) and two zeros at `z = −1` (DC = 0, Nyquist = 0 output). Plotting `|H(e^{jω})|` traces the familiar LP roll-off curve.
+
+The SVF implementation in audio_scripter is a special case: it can be mapped to a biquad but its recurrence is written in a form that keeps both state variables (low and band) readily available, making it easy to blend between filter modes.
 
 ---
 
@@ -292,7 +374,7 @@ scripting activity.
 
 ### 5.1 Lifecycle
 
-```
+```text
 compileAndInstall(source)
     │
     ├── ScriptParser::parse(source)
@@ -345,10 +427,15 @@ parser — no parser generator or external library is involved.
 `ScriptTokenizer` (Source/ScriptTokenizer.h/cpp) breaks source text into tokens:
 
 | Token type | Examples |
-|-----------|---------|
+| --- | --- |
 | Number | `0.5`, `440.0`, `6.2831853` |
 | Identifier | `inL`, `state_phase`, `fn`, `if`, `return` |
-| Operator | `+`, `-`, `*`, `/`, `=`, `;`, `{`, `}`, `(`, `)` |
+| Arithmetic operator | `+`, `-`, `*`, `/` |
+| Assignment / equality | `=`, `==` |
+| Comparison | `<`, `<=`, `>`, `>=`, `!=` |
+| Logical | `!`, `&&`, `\|\|` |
+| Bitwise | `&`, `\|`, `^`, `<<`, `>>` |
+| Punctuation | `;`, `,`, `{`, `}`, `(`, `)` |
 | Comment | everything after `#` on a line |
 
 The tokeniser is also used by `ScriptCodeTokeniser` to drive JUCE's
@@ -356,7 +443,7 @@ The tokeniser is also used by `ScriptCodeTokeniser` to drive JUCE's
 
 ### 6.2 Grammar (informal)
 
-```
+```text
 program     := statement*
 statement   := assignment | if_stmt | while_stmt | for_stmt
              | fn_def | return_stmt | break_stmt | continue_stmt
@@ -369,18 +456,27 @@ fn_def      := 'fn' identifier '(' params ')' block
 return_stmt := 'return' expr ';'
 break_stmt  := 'break' ';'
 continue_stmt := 'continue' ';'
-expr        := term ( ('+'|'-') term )*
-term        := unary ( ('*'|'/') unary )*
-unary       := '-' unary | primary
+expr        := logical_or
+logical_or  := logical_and ( '||' logical_and )*
+logical_and := bitwise_or  ( '&&' bitwise_or  )*
+bitwise_or  := bitwise_xor ( '|'  bitwise_xor )*
+bitwise_xor := bitwise_and ( '^'  bitwise_and )*
+bitwise_and := equality    ( '&'  equality    )*
+equality    := comparison  ( ('=='|'!=') comparison )*
+comparison  := shift       ( ('<'|'<='|'>'|'>=') shift )*
+shift       := add_sub     ( ('<<'|'>>') add_sub )*
+add_sub     := mul_div     ( ('+'|'-') mul_div )*
+mul_div     := unary       ( ('*'|'/') unary   )*
+unary       := ('-'|'!') unary | primary
 primary     := number | identifier | fn_call | '(' expr ')'
 fn_call     := identifier '(' (expr (',' expr)*)? ')'
 block       := '{' statement* '}'
 ```
 
-Comparison operators (`>`, `<`, `==`, `!=`) are **not** parsed as infix operators.
-They are provided as builtin functions `gt`, `lt`, `ge`, `le` to keep the grammar
-simple. Adding infix comparison requires inserting a precedence level between `term`
-and `expr`.
+The precedence hierarchy follows C: `||` binds loosest, unary operators bind tightest.
+`&&` and `||` short-circuit (right-hand side is skipped when the result is determined
+by the left). Comparison functions `gt`, `lt`, `ge`, `le`, `select` remain available
+as builtins; they cover `>=` and `<=` which have no infix form.
 
 ### 6.3 AST node types
 
@@ -388,11 +484,12 @@ Each node inherits from either `Expr` (produces a float value) or `Statement`
 (has a side effect). Key types:
 
 | Node | Kind | Purpose |
-|------|------|---------|
+| --- | --- | --- |
 | `LiteralExpr` | Expr | Numeric constant |
 | `VariableExpr` | Expr | Read a variable |
-| `BinaryOpExpr` | Expr | `+`, `-`, `*`, `/` |
-| `UnaryMinusExpr` | Expr | Negation |
+| `BinaryOpExpr` | Expr | `+`, `-`, `*`, `/`, `<`, `<=`, `>`, `>=`, `==`, `!=`, `&&`, `\|\|`, `&`, `\|`, `^`, `<<`, `>>` |
+| `UnaryMinusExpr` | Expr | Arithmetic negation (`-x`) |
+| `UnaryNotExpr` | Expr | Logical NOT (`!x`) |
 | `FunctionCallExpr` | Expr | Builtin or user-defined call |
 | `AssignmentStatement` | Statement | Write a variable |
 | `IfStatement` | Statement | Conditional |
@@ -474,7 +571,7 @@ the shared `macros` pointer, not `locals`.
 To prevent runaway scripts from stalling the audio thread:
 
 | Limit | Default | Purpose |
-|-------|---------|---------|
+| --- | --- | --- |
 | `maxInstructions` | 4096 | Abort if too many nodes evaluated per sample |
 | `maxLoopDepth` | 1024 | Prevent deeply nested loops |
 | `maxRecursionDepth` | 64 | Prevent infinite recursion |
@@ -621,7 +718,7 @@ The 8 `juce::Slider` instances are bound to APVTS parameters via
 When a script is loaded or Apply is pressed, `applyScriptMetadata()` parses two kinds
 of comment annotations:
 
-```
+```text
 # p1 = 0.65        → set slider p1 to 0.65 (calls parameter->setValueNotifyingHost)
 #@p1: Drive        → set the label above slider p1 to "Drive"
 ```
@@ -671,6 +768,7 @@ cmake --build build
 ### 11.3 CI/CD
 
 `.github/workflows/ci.yml` runs on every push and PR:
+
 1. Installs CMake and a system JUCE dependency (Linux).
 2. Runs the script validator (`python3 tools/validate_scripts.py`).
 3. Builds and runs `audio_scripter_parser_tests` via CTest.
@@ -755,16 +853,17 @@ No header changes required — state lives in the existing `persistentState` map
 6. Implement `execute()`/`evaluate()` on the new node.
 7. Add it to `ScriptCodeTokeniser` so it gets syntax-highlighted.
 
-### 13.4 Adding infix comparison operators (`<`, `>`, `==`, `!=`)
+### 13.4 How infix operators were added (`<`, `>`, `==`, `!=`, `!`, `&&`, `||`, `&`, `|`, `^`, `<<`, `>>`)
 
-Currently comparisons are builtins (`gt`, `lt`, etc.). To add infix operators:
+These operators were added in v0.0.8. The implementation involved three layers:
 
-1. Add token types `TK_LT`, `TK_GT`, `TK_EQ`, `TK_NEQ` to the tokeniser.
-2. Insert a `parseComparison()` method in the parser between `parseExpr()` and
-   `parseTerm()`, handling left-to-right chaining.
-3. Map each operator to the corresponding float comparison returning 0.0/1.0.
+1. **Tokeniser** (`ScriptTokenizer.h/cpp`): New `TokenType` enum values for each operator (`less`, `lessEqual`, `greater`, `greaterEqual`, `equalEqual`, `notEqual`, `notOp`, `andAnd`, `orOr`, `ampersand`, `pipe`, `caret`, `shiftLeft`, `shiftRight`). Single-character operators use one-character lookahead to disambiguate: `=` vs `==`, `<` vs `<<` vs `<=`, `>` vs `>>` vs `>=`, `!` vs `!=`, `&` vs `&&`, `|` vs `||`.
 
-This is a parser-only change; the evaluator and builtins are unaffected.
+2. **Parser** (`ScriptParser.h/cpp`): Eight new parse methods inserted between `parseExpression()` and `parseMulDiv()` to implement the C-like precedence hierarchy. `&&` and `||` are handled with explicit short-circuit logic — the right operand expression is only evaluated when the left operand does not determine the result.
+
+3. **Evaluator** (`ScriptParser.cpp`, `BinaryExpr::evaluate`): New `Op` enum cases map to the corresponding float operations. Bitwise operators cast to `int32_t`, operate, and cast back to `float`. Comparisons return `1.0f` or `0.0f`.
+
+The syntax highlighter (`ScriptCodeTokeniser.cpp`) was also updated to colour the new operator characters as `operatorToken`.
 
 ### 13.5 Adding a UI element
 
@@ -787,6 +886,201 @@ This is a parser-only change; the evaluator and builtins are unaffected.
   `helpText()` and in `docs/LANGUAGE_SPEC.md`.
 - New example scripts must pass `validate_scripts.py` and should include `#@pN:`
   labels and `# pN = value` defaults for all used macro parameters.
+
+---
+
+---
+
+## 15. Advanced DSP theory
+
+This chapter goes deeper into the mathematics underlying the built-in primitives and common audio effect algorithms. It is written to serve as independent study material; each subsection includes both theoretical derivation and a concrete audio_scripter script.
+
+### 15.1 The Discrete Fourier Transform
+
+The **Discrete Fourier Transform** (DFT) expresses a block of N samples as a sum of N complex sinusoids:
+
+```text
+X[k] = Σ_{n=0}^{N-1}  x[n] · e^{−j2πkn/N}
+```
+
+`X[k]` is a complex number. Its magnitude `|X[k]|` is the amplitude of the frequency bin at `k · fs / N` Hz; its argument is the phase.
+
+The **inverse DFT** reconstructs the signal:
+
+```text
+x[n] = (1/N) · Σ_{k=0}^{N-1}  X[k] · e^{j2πkn/N}
+```
+
+The DFT is computed efficiently by the **Fast Fourier Transform** (FFT), which reduces the O(N²) DFT to O(N log N) by exploiting the periodicity of the twiddle factors `e^{j2πkn/N}`.
+
+**Practical application**: audio_scripter does not expose an FFT (per-sample processing is inherently time-domain), but understanding the DFT is essential for predicting what a filter will do. The frequency response of any LTI system at frequency `f` is the DFT of its impulse response evaluated at bin `k = f · N / fs`.
+
+**Parseval's theorem**: the total power is preserved between domains:
+
+```text
+Σ |x[n]|² = (1/N) · Σ |X[k]|²
+```
+
+This means an LP filter that attenuates the upper half of the spectrum reduces total signal power.
+
+### 15.2 Linear time-invariant systems and convolution
+
+A system is **linear** if it obeys superposition: `f(ax + by) = a·f(x) + b·f(y)`. It is **time-invariant** if delaying the input delays the output by the same amount. Nearly all useful filters are LTI.
+
+An LTI system is completely characterised by its **impulse response** `h[n]` — the output when the input is a single unit impulse `δ[0] = 1, δ[n≠0] = 0`. The output for any input is the **convolution**:
+
+```text
+y[n] = Σ_{k=0}^{∞}  h[k] · x[n−k]
+```
+
+For a **FIR** (finite impulse response) filter, `h[k] = 0` for `k > M`, so the sum has M+1 terms. FIR filters are always stable (no feedback), have linear phase (optional), but require many taps for sharp cutoffs.
+
+For an **IIR** filter, `h[k]` is nonzero for all `k ≥ 0` (infinite), meaning the output depends on all past inputs. The one-pole LP filter has `h[k] = α · (1−α)^k` — an exponentially decaying impulse response. IIR filters achieve sharp cutoffs with fewer coefficients than FIR but can be unstable.
+
+**Short FIR in audio_scripter** — a 4-tap moving average:
+
+```text
+# Average 4 consecutive samples → low-pass effect
+y = (inL + delay(inL, 1.0, 0) + delay(inL, 2.0, 1) + delay(inL, 3.0, 2)) * 0.25;
+outL = y;
+outR = (inR + delay(inR, 1.0, 3) + delay(inR, 2.0, 4) + delay(inR, 3.0, 5)) * 0.25;
+```
+
+Its frequency response is a sinc-like function with the first null at `fs / 4`. This removes high frequencies but also introduces ripple; a Hamming-windowed FIR with the same cutoff would be smoother.
+
+### 15.3 Harmonic distortion and waveshaping
+
+When a sine wave at frequency `f` passes through a nonlinearity `f(x)`, the output contains harmonics at `2f, 3f, 4f, ...`. The amplitudes of these harmonics depend on the Taylor coefficients of `f` around zero.
+
+For `tanh(d·x)`:
+
+```text
+tanh(d·x) = d·x − (d·x)³/3 + 2(d·x)⁵/15 − ...
+```
+
+Only odd powers appear, so `tanh` generates only **odd harmonics** (3rd, 5th, ...). This produces a sound analogous to push-pull transistor distortion.
+
+For `|x|` (full-wave rectification, an asymmetric waveshaper):
+
+```text
+|x| = 2/π + (4/π) · Σ_{k=1}^{∞} (-1)^(k+1) / (4k²-1) · cos(2k·2πf·t)
+```
+
+This generates only **even harmonics** (2nd, 4th, ...) — the character of tape saturation and tube amplifiers.
+
+**Total Harmonic Distortion** (THD) measures distortion:
+
+```text
+THD = sqrt(P2 + P3 + P4 + ...) / P1
+```
+
+where `P_k` is the power at the k-th harmonic. Typical amplifier targets: < 0.01% THD at rated power. Guitar distortion pedals intentionally operate at > 10% THD.
+
+**Wavefolding** is a more extreme case. When the input exceeds the boundary `hi`, it folds back symmetrically, then folds again if it exceeds `lo` on the return, and so on. Each fold adds more harmonic content. For a heavily driven sine wave the output spectrum becomes rich and inharmonic, producing metallic timbres characteristic of FM synthesis and modular synthesis.
+
+### 15.4 Oscillator theory and phase distortion
+
+Every waveform can be generated via a **phase accumulator**: a state variable that increases by `f/sr` each sample and wraps at 1.0. The accumulated phase is then mapped to a waveform shape.
+
+```text
+state_phase = wrap(state_phase + freq / sr, 0.0, 1.0);
+outL = shape(state_phase);   # substitute any shaping function
+```
+
+Common shapes:
+
+| Waveform | Expression | Spectrum |
+| --- | --- | --- |
+| Sine | `sin(2π · phase)` | Fundamental only |
+| Sawtooth | `2·phase − 1` | All harmonics, 1/n amplitude |
+| Square | `phase < 0.5 ? 1.0 : -1.0` | Odd harmonics, 1/n amplitude |
+| Triangle | `abs(4·phase − 2) − 1` | Odd harmonics, 1/n² amplitude |
+
+A **sawtooth** has energy at all harmonics falling off as `1/n`. Its spectrum has a "bright" character. A **triangle** has the same harmonic structure but amplitude falls off as `1/n²` — much darker.
+
+**Aliasing**: the digital sawtooth (naïve phase accumulator with linear ramp) produces aliasing — spectral copies folded back from frequencies above Nyquist. Correct oscillators use **band-limited synthesis** (e.g. polyBLEP or summing Fourier series). The simple waveforms in audio_scripter scripts alias at high pitches; this is often acceptable for effects but unsuitable for pitched instruments.
+
+**Phase distortion synthesis** (used in Casio CZ synthesisers) warps the phase before mapping to a waveform. For example, squeezing the first half of the phase makes the sine wave spend more time near the peak, creating a more aggressive timbre without changing pitch.
+
+### 15.5 Feedback systems and stability
+
+Any script that feeds the output (or delayed output) back into the input is a **feedback system**. The critical stability condition for a linear feedback loop is the **Nyquist criterion**: the loop gain must be less than 1 at all frequencies where the phase shift is exactly 360°.
+
+For the simplest case — a delay line with feedback:
+
+```text
+state_fb = delay(inL + state_fb * fb, d, 0);
+```
+
+The loop gain is `|fb|` at all frequencies. Stability requires `|fb| < 1`. As `fb → 1`, the decay time approaches infinity — infinite reverb tail. `|fb| > 1` causes exponential growth and clipping.
+
+For a filter followed by feedback, the frequency-dependent phase shift means some frequencies may become unstable before others. The SVF manages this: the state variables inherently bound the response at all frequencies for `q > 0.5` and `cutoff < 0.99`.
+
+**Self-oscillation**: when a filter's resonance (feedback gain) reaches 1, the filter oscillates at its cutoff frequency even without an input signal. This is exploited in modular synthesis.
+
+### 15.6 The decibel scale and psychoacoustics
+
+Human hearing is roughly logarithmic in both frequency and amplitude. The decibel scales this:
+
+| dB | Amplitude ratio | Perceived change |
+| --- | --- | --- |
+| +6 | ×2 | Roughly twice as loud |
+| 0 | 1 | Reference |
+| −6 | ×0.5 | Roughly half as loud |
+| −20 | ×0.1 | Much quieter |
+| −60 | ×0.001 | Very faint |
+| −∞ | 0 | Silence |
+
+The **Fletcher–Munson curves** (equal-loudness contours) show that sensitivity varies with frequency. At 1 kHz, 40 dB SPL sounds as loud as 60 dB at 100 Hz. This is why bass sounds "disappear" at low listening volumes.
+
+**Masking**: a loud signal can make nearby-frequency soft signals inaudible. This is the basis of perceptual audio codecs (MP3, AAC): sounds that would be masked are discarded to save bits. Understanding masking helps explain why saturation harmonic content at frequencies above a loud fundamental is often imperceptible.
+
+### 15.7 Designing multi-stage effects
+
+Complex effects are built from simple primitives in series, parallel, or with feedback.
+
+**Series** (signal chain): one effect feeds into another. The order matters: a compressor before a distortion pedal is very different from distortion before compression.
+
+**Parallel** (wet/dry, layering): multiple signal paths are mixed. This is the basis of chorus, reverb send/return, and multi-band processing.
+
+**Feedback** (recursion): a portion of the output is fed back into the input after processing. Delay → feedback loop produces echo; filter → feedback produces resonance; all-pass cascade → feedback produces reverberation.
+
+#### Worked example: signal compander for noise reduction
+
+A compander is a compressor on the way in and an expander on the way out. It was used in analogue tape recording to reduce tape hiss:
+
+1. Before recording: compress the dynamic range by 2:1 (quieter parts are boosted).
+2. After playback: expand by 1:2 (the boost is undone, but the constant-level tape noise is also attenuated).
+
+In a script:
+
+```text
+# Simple compander: compress on encode, expand on decode (run twice in chain)
+# Encode half: set p1 = 0.5 (compress), Decode half: set p1 = 1.5 (expand)
+ratio = 0.5 + p1;       # p1 controls encode/decode
+env_l = env(abs(inL), 0.005, 0.1, 0);
+env_r = env(abs(inR), 0.005, 0.1, 1);
+thresh = 0.1;
+gainL = select(gt(env_l, thresh), pow(env_l / thresh, ratio - 1.0), 1.0);
+gainR = select(gt(env_r, thresh), pow(env_r / thresh, ratio - 1.0), 1.0);
+outL = inL * gainL;
+outR = inR * gainR;
+```
+
+### 15.8 Practical script performance
+
+Per-sample execution at 44100 Hz means each sample has ≈ 22 µs of budget. A modern CPU executing ~10⁹ simple operations per second has roughly 22,000 operations per sample. The interpreter overhead (AST node dispatch, map lookup) costs 10–20 "operations" per node. With 4096 instruction maximum:
+
+- Simple effects (10 nodes): ≈ 200–400 operations → well within budget.
+- Medium effects (100 nodes): ≈ 1,000–4,000 operations → comfortable at 44.1 kHz.
+- Heavy scripts (500+ nodes with loops): may exceed budget and trigger abort.
+
+Practical optimisation tips:
+
+1. **Precompute constants once** per sample rather than re-evaluating expressions inside loops.
+2. **Use the `id`-lane primitives** (`lpf1`, `svf`, etc.) instead of manual state variables for filter state — the built-in implementations avoid map lookups.
+3. **Keep loops short** — a `for` loop over 12 iterations costs 12× the per-loop overhead.
+4. **Avoid deeply nested function calls** — each call saves/restores the locals map.
 
 ---
 

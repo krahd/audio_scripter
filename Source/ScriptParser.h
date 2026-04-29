@@ -201,6 +201,14 @@ private:
     std::unique_ptr<Statement> parseContinue();
     std::unique_ptr<Statement> parseAssignmentOrExpr();
     std::unique_ptr<Expr> parseExpression();
+    std::unique_ptr<Expr> parseLogicalOr();
+    std::unique_ptr<Expr> parseLogicalAnd();
+    std::unique_ptr<Expr> parseBitwiseOr();
+    std::unique_ptr<Expr> parseBitwiseXor();
+    std::unique_ptr<Expr> parseBitwiseAnd();
+    std::unique_ptr<Expr> parseEquality();
+    std::unique_ptr<Expr> parseComparison();
+    std::unique_ptr<Expr> parseShift();
     std::unique_ptr<Expr> parseAddSub();
     std::unique_ptr<Expr> parseMulDiv();
     std::unique_ptr<Expr> parseUnary();

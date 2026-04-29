@@ -1,6 +1,6 @@
 # audio_scripter — script language manual
 
-Version 2.x · reflects the implemented parser and runtime
+v0.0.8 · reflects the implemented parser and runtime
 
 ---
 
@@ -131,19 +131,66 @@ State variables are initialised to `0.0` on the first sample after the script is
 
 Parentheses work as expected. There is no exponentiation operator — use `pow(a, b)`.
 
-### Comparison
+### Comparison operators
 
-There are no `<`, `>`, `==`, `!=` operators. Use the comparison functions instead:
+Comparison operators return `1.0` for true, `0.0` for false and have lower precedence than arithmetic:
 
-| Function | Returns |
+| Operator | Meaning |
 | --- | --- |
-| `gt(a, b)` | `1.0` if `a > b`, else `0.0` |
-| `lt(a, b)` | `1.0` if `a < b`, else `0.0` |
-| `ge(a, b)` | `1.0` if `a >= b`, else `0.0` |
-| `le(a, b)` | `1.0` if `a <= b`, else `0.0` |
-| `select(c, a, b)` | `a` if `c != 0.0`, else `b` |
+| `a < b` | less-than |
+| `a <= b` | less-than-or-equal |
+| `a > b` | greater-than |
+| `a >= b` | greater-than-or-equal |
+| `a == b` | equal |
+| `a != b` | not equal |
 
-These return floats and can be used in any arithmetic expression. In `if` and `while` conditions, any non-zero value is truthy.
+The comparison functions `gt`, `lt`, `ge`, `le`, `select` remain available and are equivalent:
+
+| Function | Equivalent |
+| --- | --- |
+| `gt(a, b)` | `a > b` |
+| `lt(a, b)` | `a < b` |
+| `ge(a, b)` | `a >= b` |
+| `le(a, b)` | `a <= b` |
+| `select(c, a, b)` | `c != 0 ? a : b` |
+
+### Logical operators
+
+| Operator | Meaning |
+| --- | --- |
+| `!a` | logical NOT — `1.0` if `a == 0.0`, else `0.0` |
+| `a && b` | logical AND — `1.0` if both non-zero (short-circuits) |
+| `a \|\| b` | logical OR — `1.0` if either non-zero (short-circuits) |
+
+### Bitwise operators
+
+These operators convert their operands to 32-bit integers, apply the operation, and return the result as a float. They are useful for bit-crushing and integer-domain effects.
+
+| Operator | Meaning |
+| --- | --- |
+| `a & b` | bitwise AND |
+| `a \| b` | bitwise OR |
+| `a ^ b` | bitwise XOR |
+| `a << b` | left shift by b bits |
+| `a >> b` | arithmetic right shift by b bits |
+
+### Operator precedence (low to high)
+
+| Level | Operators |
+| --- | --- |
+| 1 (lowest) | `\|\|` |
+| 2 | `&&` |
+| 3 | `\|` |
+| 4 | `^` |
+| 5 | `&` |
+| 6 | `==`  `!=` |
+| 7 | `<`  `<=`  `>`  `>=` |
+| 8 | `<<`  `>>` |
+| 9 | `+`  `-` |
+| 10 | `*`  `/` |
+| 11 (highest) | unary `-`  `!` |
+
+In `if` and `while` conditions, any non-zero value is truthy.
 
 ---
 
@@ -176,7 +223,7 @@ The `else` branch is optional. Braces are optional for single-statement bodies, 
 ```text
 # Gate: silence output if input is very quiet
 amp = env(abs(inL), 0.01, 0.1, 0);
-if (lt(amp, 0.01)) {
+if (amp < 0.01) {
     outL = 0.0;
     outR = 0.0;
 }
@@ -217,7 +264,7 @@ for (i = start; condition; step) { ... }
 
 ```text
 # Walk backwards in steps of 0.5
-for (i = 10.0; gt(i, 0.0); -0.5) {
+for (i = 10.0; i > 0.0; -0.5) {
     ...
 }
 ```
@@ -230,9 +277,9 @@ for (i = 10.0; gt(i, 0.0); -0.5) {
 ```text
 fn iterFold(x, drv, iters) {
     y = x * drv;
-    for (k = 0.0; lt(k, 12.0); 1.0) {
-        if (ge(k, iters)) { break; }
-        if (lt(abs(y), 0.02)) { continue; }
+    for (k = 0.0; k < 12.0; 1.0) {
+        if (k >= iters) { break; }
+        if (abs(y) < 0.02) { continue; }
         y = fold(y, -1.0, 1.0);
     }
     return y * 0.65;
@@ -367,10 +414,10 @@ Mode comparison:
 
 | Function | Returns |
 | --- | --- |
-| `gt(a, b)` | `1.0` if `a > b`, else `0.0` |
-| `lt(a, b)` | `1.0` if `a < b`, else `0.0` |
-| `ge(a, b)` | `1.0` if `a >= b`, else `0.0` |
-| `le(a, b)` | `1.0` if `a <= b`, else `0.0` |
+| `gt(a, b)` | `1.0` if `a > b`, else `0.0` — same as `a > b` |
+| `lt(a, b)` | `1.0` if `a < b`, else `0.0` — same as `a < b` |
+| `ge(a, b)` | `1.0` if `a >= b`, else `0.0` — same as `a >= b` |
+| `le(a, b)` | `1.0` if `a <= b`, else `0.0` — same as `a <= b` |
 | `select(cond, a, b)` | `a` if `cond != 0.0`, else `b` |
 
 ---
@@ -440,9 +487,9 @@ outR = mix(inR, fR, p4);
 # @p1: Drive  @p2: Iterations  @p3: Wet
 fn iterFold(x, drv, iters) {
     y = x * drv;
-    for (k = 0.0; lt(k, 12.0); 1.0) {
-        if (ge(k, iters)) { break; }
-        if (lt(abs(y), 0.02)) { continue; }
+    for (k = 0.0; k < 12.0; 1.0) {
+        if (k >= iters) { break; }
+        if (abs(y) < 0.02) { continue; }
         y = fold(y, -1.0, 1.0);
     }
     return y * 0.65;
@@ -469,8 +516,8 @@ outR = mix(inR, iterFold(inR, drive, iters), p3);
 | --- | --- |
 | Maximum top-level statements per script | 256 |
 | Maximum instructions per sample | 4096 |
-| Maximum loop depth | enforced |
-| Maximum recursion depth | enforced |
+| Maximum loop depth | 1024 |
+| Maximum recursion depth | 64 |
 | Maximum persistent state entries | 128 |
 | Maximum delay buffer per lane | 96000 samples |
 
