@@ -4,13 +4,14 @@
 # p1 = 0.64
 # p2 = 0.44
 # p3 = 0.78
-# High-pass with dedicated hp1 primitive + optional resonance color
+# Stable high-pass with optional band edge color
 # p1 = cutoff (low=strong bass cut), p2 = resonance color, p3 = dry/wet
 coeff = 0.004 + p1 * 0.24;
-res = p2 * 0.5;
-hpL = hp1(inL + state_hpFbL * res, coeff, 0);
-hpR = hp1(inR + state_hpFbR * res, coeff, 1);
-state_hpFbL = hpL;
-state_hpFbR = hpR;
-outL = mix(inL, hpL, p3);
-outR = mix(inR, hpR, p3);
+hpL = hp1(inL, coeff, 0);
+hpR = hp1(inR, coeff, 1);
+edgeL = bp1(inL, coeff * 0.55, 0.18 + p2 * 0.32, 2);
+edgeR = bp1(inR, coeff * 0.55, 0.18 + p2 * 0.32, 3);
+wetL = tanh(hpL * (1.0 + p2 * 0.25) + edgeL * p2 * 0.55);
+wetR = tanh(hpR * (1.0 + p2 * 0.25) + edgeR * p2 * 0.55);
+outL = mix(inL, wetL, p3);
+outR = mix(inR, wetR, p3);

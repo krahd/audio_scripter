@@ -4,14 +4,16 @@
 # p1 = 0.68
 # p2 = 0.62
 # p3 = 0.9
-# Harmonic shimmer: wavefold + rectified high band reinjection
-preL = inL * (1.0 + p1 * 10.0);
-preR = inR * (1.0 + p1 * 10.0);
-foldedL = fold(preL, -0.65, 0.65);
-foldedR = fold(preR, -0.65, 0.65);
-hiL = foldedL - lpf1(foldedL, 0.07, 0);
-hiR = foldedR - lpf1(foldedR, 0.07, 1);
-shimmerL = foldedL + abs(hiL) * p2 * 0.8;
-shimmerR = foldedR + abs(hiR) * p2 * 0.8;
-outL = mix(inL, tanh(shimmerL), p3);
-outR = mix(inR, tanh(shimmerR), p3);
+# Musical wavefolder with filtered sparkle; useful on bass, keys, and drums.
+drive = 1.0 + p1 * 8.0;
+limit = 0.55 + (1.0 - p2) * 0.35;
+foldL = fold(inL * drive, -limit, limit);
+foldR = fold(inR * drive, -limit, limit);
+softL = tanh(foldL * 1.8) * 0.78;
+softR = tanh(foldR * 1.8) * 0.78;
+sparkL = hp1(abs(softL), 0.03 + p2 * 0.16, 0);
+sparkR = hp1(abs(softR), 0.03 + p2 * 0.16, 1);
+wetL = tanh(softL + sparkL * p2 * 0.75);
+wetR = tanh(softR + sparkR * p2 * 0.75);
+outL = mix(inL, wetL, p3);
+outR = mix(inR, wetR, p3);

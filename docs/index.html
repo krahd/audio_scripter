@@ -226,7 +226,7 @@
 <div class="hero">
   <div class="container">
     <h1>audio_scripter</h1>
-    <div class="version">v0.0.8</div>
+    <div class="version">v0.0.9</div>
     <p>A real-time scriptable audio effects plugin. Write per-sample DSP scripts, press Apply, hear the result — no compilation step, no DAW restart.</p>
     <div class="cta">
       <a class="btn btn-primary" href="https://github.com/krahd/audio_scripter/releases">Download</a>
@@ -337,37 +337,32 @@ outR = <span class="fn">mix</span>(inR, procR, p4);</pre>
 
       <div class="example-card">
         <h3>Micro-delay widener</h3>
-        <pre><span class="comment"># @p1: Time  @p2: Feedback  @p3: Width  @p4: Wet</span>
-base = <span class="num">12.0</span> + p1 * <span class="num">520.0</span>;
-fb   = p2 * <span class="num">0.55</span>;
-spread = <span class="num">1.0</span> + p3 * <span class="num">0.8</span>;
+        <pre><span class="comment"># @p1: Time  @p2: Cross  @p3: Width  @p4: Wet</span>
+base = <span class="num">8.0</span> + p1 * <span class="num">520.0</span>;
+cross = p2 * <span class="num">0.35</span>;
+spread = <span class="num">1.08</span> + p3 * <span class="num">0.75</span>;
 
-delInL = inL + state_fbL * fb;
-delInR = inR + state_fbR * fb;
-dL = <span class="fn">delay</span>(delInL, base, <span class="num">0</span>);
-dR = <span class="fn">delay</span>(delInR, base * spread, <span class="num">1</span>);
-state_fbL = <span class="fn">sat</span>(dL, <span class="num">0.6</span> + p2 * <span class="num">0.9</span>, <span class="num">0</span>);
-state_fbR = <span class="fn">sat</span>(dR, <span class="num">0.6</span> + p2 * <span class="num">0.9</span>, <span class="num">0</span>);
-outL = <span class="fn">mix</span>(inL, dL, p4);
-outR = <span class="fn">mix</span>(inR, dR, p4);</pre>
+dL = <span class="fn">delay</span>(inL, base, <span class="num">0</span>);
+dR = <span class="fn">delay</span>(inR, base * spread, <span class="num">1</span>);
+wetL = dL * (<span class="num">1.0</span> - cross) + dR * cross;
+wetR = dR * (<span class="num">1.0</span> - cross) + dL * cross;
+outL = <span class="fn">mix</span>(inL, wetL, p4);
+outR = <span class="fn">mix</span>(inR, wetR, p4);</pre>
       </div>
 
       <div class="example-card">
-        <h3>Iterative wavefold</h3>
-        <pre><span class="comment"># @p1: Drive  @p2: Iterations  @p3: Wet</span>
-<span class="kw">fn</span> <span class="fn">iterFold</span>(x, drv, iters) {
-    y = x * drv;
-    <span class="kw">for</span> (k = <span class="num">0.0</span>; k &lt; <span class="num">12.0</span>; <span class="num">1.0</span>) {
-        <span class="kw">if</span> (<span class="fn">ge</span>(k, iters)) { <span class="kw">break</span>; }
-        <span class="kw">if</span> (<span class="fn">abs</span>(y) &lt; <span class="num">0.02</span>) { <span class="kw">continue</span>; }
-        y = <span class="fn">fold</span>(y, <span class="num">-1.0</span>, <span class="num">1.0</span>);
-    }
-    <span class="kw">return</span> y * <span class="num">0.65</span>;
-}
-drive = <span class="num">1.0</span> + p1 * <span class="num">7.0</span>;
-iters = <span class="num">1.0</span> + p2 * <span class="num">11.0</span>;
-outL = <span class="fn">mix</span>(inL, <span class="fn">iterFold</span>(inL, drive, iters), p3);
-outR = <span class="fn">mix</span>(inR, <span class="fn">iterFold</span>(inR, drive, iters), p3);</pre>
+        <h3>Tilt EQ</h3>
+        <pre><span class="comment"># @p1: Tilt  @p2: Focus  @p3: Wet</span>
+cut = <span class="num">0.018</span> + p2 * <span class="num">0.16</span>;
+lowL = <span class="fn">lpf1</span>(inL, cut, <span class="num">0</span>);
+lowR = <span class="fn">lpf1</span>(inR, cut, <span class="num">1</span>);
+highL = inL - lowL;
+highR = inR - lowR;
+tilt = (p1 - <span class="num">0.5</span>) * <span class="num">2.0</span>;
+lowGain = <span class="num">1.0</span> - tilt * <span class="num">0.55</span>;
+highGain = <span class="num">1.0</span> + tilt * <span class="num">0.75</span>;
+outL = <span class="fn">mix</span>(inL, <span class="fn">tanh</span>(lowL * lowGain + highL * highGain), p3);
+outR = <span class="fn">mix</span>(inR, <span class="fn">tanh</span>(lowR * lowGain + highR * highGain), p3);</pre>
       </div>
 
       <div class="example-card">

@@ -1,5 +1,4 @@
 #include "PluginEditor.h"
-#include <algorithm>
 #include <regex>
 #include <fstream>
 #include <sstream>
@@ -191,7 +190,7 @@ AudioScripterAudioProcessorEditor::AudioScripterAudioProcessorEditor (AudioScrip
     setResizable (true, true);
     setResizeLimits (600, 350, 3840, 2400);
 
-    titleLabel.setText ("audio_scripter 0.0.8", juce::dontSendNotification);
+    titleLabel.setText ("audio_scripter 0.0.9", juce::dontSendNotification);
     titleLabel.setJustificationType (juce::Justification::centredLeft);
     titleLabel.setFont (juce::FontOptions (18.0f, juce::Font::bold));
     addAndMakeVisible (titleLabel);
@@ -248,38 +247,11 @@ AudioScripterAudioProcessorEditor::AudioScripterAudioProcessorEditor (AudioScrip
     examplesBox.addListener (this);
     examplesBox.addItem ("Select example...", 1);
 
-#if defined(EXAMPLES_DIR)
-    {
-        juce::File examplesDir (EXAMPLES_DIR);
-        if (examplesDir.isDirectory())
-        {
-            juce::Array<juce::File> files;
-            examplesDir.findChildFiles (files, juce::File::findFiles, false, "*.ascr");
-            if (files.size() > 1)
-            {
-                std::sort(files.getRawDataPointer(), files.getRawDataPointer() + files.size(),
-                          [] (const juce::File& a, const juce::File& b) { return a.getFileName().compareNatural (b.getFileName()) < 0; });
-            }
-            for (int i = 0; i < files.size(); ++i)
-            {
-                examplesBox.addItem (files[i].getFileNameWithoutExtension(), i + 2);
-                exampleFiles.push_back (files[i]);
-            }
-        }
-        else
-        {
-            const auto names = scripting::exampleNames();
-            for (int i = 0; i < names.size(); ++i)
-                examplesBox.addItem (names[i], i + 2);
-        }
-    }
-#else
     {
         const auto names = scripting::exampleNames();
         for (int i = 0; i < names.size(); ++i)
             examplesBox.addItem (names[i], i + 2);
     }
-#endif
 
     addAndMakeVisible (examplesBox);
     // make "Select example..." visible by default
@@ -416,25 +388,8 @@ void AudioScripterAudioProcessorEditor::comboBoxChanged (juce::ComboBox* box)
     if (idx < 0)
         return;
 
-    // If we have example files discovered at runtime, load the file contents.
-    if (idx < (int) exampleFiles.size())
-    {
-        const auto file = exampleFiles[(size_t) idx];
-        if (file.existsAsFile())
-        {
-            scriptEditor->loadContent (loadTextFileFixEncoding (file));
-            applyScript();
-        }
-        return;
-    }
-
-    // Fallback to built-in indexed examples (if available).
-    const auto fallbackIdx = idx - (int) exampleFiles.size();
-    if (fallbackIdx >= 0)
-    {
-        scriptEditor->loadContent (scripting::exampleScript (fallbackIdx));
-        applyScript();
-    }
+    scriptEditor->loadContent (scripting::exampleScript (idx));
+    applyScript();
 }
 
 void AudioScripterAudioProcessorEditor::applyScript()
@@ -534,7 +489,7 @@ void AudioScripterAudioProcessorEditor::showAboutBox()
     {
         AboutContent()
         {
-            title.setText ("audio_scripter 0.0.8", juce::dontSendNotification);
+            title.setText ("audio_scripter 0.0.9", juce::dontSendNotification);
             title.setFont (juce::FontOptions (17.0f, juce::Font::bold));
             title.setJustificationType (juce::Justification::centred);
             title.setColour (juce::Label::textColourId, juce::Colour (0xff4ec9b0));

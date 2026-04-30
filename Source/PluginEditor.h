@@ -44,7 +44,6 @@ private:
     juce::HyperlinkButton aboutButton { "About", juce::URL() };
     juce::TextButton defaultsButton { "Defaults" };
     juce::ComboBox examplesBox;
-    std::vector<juce::File> exampleFiles;
     juce::CodeDocument helpDocument;
     std::unique_ptr<juce::CodeEditorComponent> helpPanel;
 

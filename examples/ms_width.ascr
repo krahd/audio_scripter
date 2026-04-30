@@ -4,16 +4,8 @@
 # p2 = 0.5
 # Mid/Side stereo width control with optional side channel saturation
 # p1 = width (0=mono, 0.5=original, 1=ultra-wide), p2 = side drive
-fn encMid(l, r) {
-    return (l + r) * 0.5;
-}
-
-fn encSide(l, r) {
-    return (l - r) * 0.5;
-}
-
-mid = encMid(inL, inR);
-side = encSide(inL, inR);
+mid = (inL + inR) * 0.5;
+side = (inL - inR) * 0.5;
 width = p1 * 2.0;
 satSide = tanh(side * (1.0 + p2 * 5.0));
 wSide = satSide * width;

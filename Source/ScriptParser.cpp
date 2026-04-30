@@ -9,6 +9,11 @@ namespace
 {
 constexpr int kMaxStatements = 256;
 
+float finiteOrZero (float x)
+{
+    return std::isfinite (x) ? x : 0.0f;
+}
+
 bool consumeInstruction (EvalContext& ctx)
 {
     ++ctx.instructionCount;
@@ -347,6 +352,8 @@ float EvalContext::getValue (const juce::String& name) const
 
 void EvalContext::setValue (const juce::String& name, float value)
 {
+    value = finiteOrZero (value);
+
     if (name == "outL") { outL = value; return; }
     if (name == "outR") { outR = value; return; }
     if (macros != nullptr)

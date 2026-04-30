@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.0.9 - 2026-04-30
+
+### Changed
+- Embed curated example scripts into the plugin binary so Ableton and other hosts do not depend on stale source-path `.ascr` files.
+- Remove weak/noisy demo examples that were not useful as musical effects.
+- Rework wah/phaser/filter/fold-style examples into stable, distinct presets and add practical `clean_doubler`, `tilt_eq`, and `transient_shaper` examples.
+- Add render-level example regression checks for wetness, stability, unintended tails, peak level, and near-duplicate output.
+- Harden the effects runtime against runaway scripts with finite-value sanitization, safer `fold()`, output clamping, and a larger persistent-state budget.
+
 ## 0.0.8 - 2026-04-29
 
 ### Added

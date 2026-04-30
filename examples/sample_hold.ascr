@@ -12,6 +12,11 @@ if (gt(trig, 0.5)) {
     state_hR = inR;
 }
 
+activity = abs(inL) + abs(inR);
+decay = select(gt(activity, 0.002), 1.0, 0.965);
+state_hL = state_hL * decay;
+state_hR = state_hR * decay;
+
 # Slew prevents hard discontinuities from held-step jumps.
 heldL = slew(state_hL, 0.004 + p2 * 0.02, 0);
 heldR = slew(state_hR, 0.004 + p2 * 0.02, 1);

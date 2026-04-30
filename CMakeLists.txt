@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(audio_scripter VERSION 0.0.8)
+project(audio_scripter VERSION 0.0.9)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -23,6 +23,14 @@ else()
 endif()
 
 if (AUDIO_SCRIPTER_BUILD_PLUGIN)
+  file(GLOB AUDIO_SCRIPTER_EXAMPLE_SOURCES CONFIGURE_DEPENDS
+    "${CMAKE_SOURCE_DIR}/examples/*.ascr")
+
+  juce_add_binary_data(audio_scripter_examples
+    NAMESPACE AudioScripterExamples
+    HEADER_NAME AudioScripterExampleData.h
+    SOURCES ${AUDIO_SCRIPTER_EXAMPLE_SOURCES})
+
   juce_add_plugin(audio_scripter
     COMPANY_NAME "Tomas Laurenzo"
     BUNDLE_ID com.audioscripter.plugin
@@ -53,14 +61,12 @@ if (AUDIO_SCRIPTER_BUILD_PLUGIN)
     JUCE_WEB_BROWSER=0
     JUCE_USE_CURL=0)
 
-  # Provide examples dir path to the plugin so the editor can load example files at runtime
-  target_compile_definitions(audio_scripter PRIVATE EXAMPLES_DIR="${CMAKE_SOURCE_DIR}/examples")
-
   # Suppress JUCE VST3/VST2 parameter ID mismatch error for local builds
   target_compile_definitions(audio_scripter PRIVATE
     JUCE_IGNORE_VST3_MISMATCHED_PARAMETER_ID_WARNING=1)
 
   target_link_libraries(audio_scripter PRIVATE
+    audio_scripter_examples
     juce::juce_audio_utils
     juce::juce_dsp
     juce::juce_gui_extra
@@ -71,6 +77,16 @@ endif()
 
 if (AUDIO_SCRIPTER_BUILD_TESTS)
   enable_testing()
+
+  if (NOT TARGET audio_scripter_examples)
+    file(GLOB AUDIO_SCRIPTER_EXAMPLE_SOURCES CONFIGURE_DEPENDS
+      "${CMAKE_SOURCE_DIR}/examples/*.ascr")
+
+    juce_add_binary_data(audio_scripter_examples
+      NAMESPACE AudioScripterExamples
+      HEADER_NAME AudioScripterExampleData.h
+      SOURCES ${AUDIO_SCRIPTER_EXAMPLE_SOURCES})
+  endif()
 
   add_executable(audio_scripter_parser_tests
     tests/ScriptParserTests.cpp
@@ -85,6 +101,7 @@ if (AUDIO_SCRIPTER_BUILD_TESTS)
     JUCE_USE_CURL=0)
 
   target_link_libraries(audio_scripter_parser_tests PRIVATE
+    audio_scripter_examples
     juce::juce_audio_basics
     juce::juce_core
     juce::juce_recommended_config_flags

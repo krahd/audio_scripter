@@ -151,6 +151,16 @@ float rmsDifference (const std::vector<float>& a, const std::vector<float>& b)
     return (float) std::sqrt (energy / (double) n);
 }
 
+bool exampleMayHaveTail (const std::string& name)
+{
+    return name == "clean_doubler.ascr"
+        || name == "chorus.ascr"
+        || name == "micro_delay_widen.ascr"
+        || name == "ping_pong_delay.ascr"
+        || name == "reverb.ascr"
+        || name == "simple_delay.ascr";
+}
+
 int run()
 {
     {
@@ -438,11 +448,14 @@ int runEngineTests()
 
     if (std::filesystem::exists (examplesDir))
     {
+        int fileExampleCount = 0;
+
         for (const auto& entry : std::filesystem::directory_iterator (examplesDir))
         {
             if (entry.path().extension() != ".ascr")
                 continue;
 
+            ++fileExampleCount;
             const std::string src = readTextFile (entry.path());
 
             scripting::ScriptEngine engine;
@@ -484,21 +497,37 @@ int runEngineTests()
             }
         }
 
-        const std::vector<std::string> auditedExamples {
-            "autowah.ascr",
-            "cos_phaser.ascr",
-            "envelope_duck_tremor.ascr",
-            "exp_compressor.ascr",
-            "harmonic_exciter.ascr",
-            "iter_fold.ascr",
-            "low_pass_morph.ascr"
-        };
-
-        RenderResult autowahRender;
-        bool haveAutowah = false;
-
-        for (const auto& name : auditedExamples)
+        const auto embeddedNames = scripting::exampleNames();
+        if (embeddedNames.size() != fileExampleCount)
         {
+            std::cerr << "Engine example behavior test: embedded example count "
+                      << embeddedNames.size() << " does not match file count "
+                      << fileExampleCount << "\n";
+            return 1;
+        }
+
+        for (int i = 0; i < embeddedNames.size(); ++i)
+        {
+            scripting::ScriptEngine engine;
+            engine.reset (44100.0);
+            const auto r = engine.compileAndInstall (scripting::exampleScript (i));
+            if (! r.ok)
+            {
+                std::cerr << "Engine embedded example test: compile failed for "
+                          << embeddedNames[i] << "\n"
+                          << r.errors.joinIntoString ("\n") << "\n";
+                return 1;
+            }
+        }
+
+        std::vector<std::pair<std::string, RenderResult>> renders;
+
+        for (const auto& entry : std::filesystem::directory_iterator (examplesDir))
+        {
+            if (entry.path().extension() != ".ascr")
+                continue;
+
+            const auto name = entry.path().filename().string();
             const auto path = examplesDir / name;
             if (! std::filesystem::exists (path))
             {
@@ -523,7 +552,7 @@ int runEngineTests()
                 return 1;
             }
 
-            if (rendered.tailRms > 0.012f)
+            if (! exampleMayHaveTail (name) && rendered.tailRms > 0.012f)
             {
                 std::cerr << "Engine example behavior test: " << name
                           << " leaves a non-delay tail; tail rms=" << rendered.tailRms << "\n";
@@ -537,21 +566,19 @@ int runEngineTests()
                 return 1;
             }
 
-            if (name == "autowah.ascr")
-            {
-                autowahRender = std::move (rendered);
-                haveAutowah = true;
-                continue;
-            }
+            renders.push_back ({ name, std::move (rendered) });
+        }
 
-            if (haveAutowah)
+        for (size_t i = 0; i < renders.size(); ++i)
+        {
+            for (size_t j = i + 1; j < renders.size(); ++j)
             {
-                const auto distanceFromAutowah = rmsDifference (rendered.wetL, autowahRender.wetL);
-                if (distanceFromAutowah < 0.010f)
+                const auto distance = rmsDifference (renders[i].second.wetL, renders[j].second.wetL);
+                if (distance < 0.004f)
                 {
-                    std::cerr << "Engine example behavior test: " << name
-                              << " renders too similarly to autowah; rms distance="
-                              << distanceFromAutowah << "\n";
+                    std::cerr << "Engine example behavior test: "
+                              << renders[i].first << " and " << renders[j].first
+                              << " render too similarly; rms distance=" << distance << "\n";
                     return 1;
                 }
             }

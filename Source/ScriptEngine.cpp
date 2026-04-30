@@ -1,8 +1,10 @@
 #include "ScriptEngine.h"
+#include "AudioScripterExampleData.h"
 
 #include <algorithm>
 #include <cmath>
 #include <memory>
+#include <vector>
 
 namespace scripting
 {
@@ -11,6 +13,60 @@ namespace
 float clampf (float x, float lo, float hi)
 {
     return std::min (hi, std::max (lo, x));
+}
+
+float finiteOrZero (float x)
+{
+    return std::isfinite (x) ? x : 0.0f;
+}
+
+float sanitizeAudio (float x)
+{
+    return clampf (finiteOrZero (x), -4.0f, 4.0f);
+}
+
+juce::String prettifyExampleName (juce::String fileName)
+{
+    auto stem = juce::File (fileName).getFileNameWithoutExtension().replaceCharacter ('_', ' ');
+    juce::StringArray words;
+    words.addTokens (stem, " ", {});
+    words.removeEmptyStrings();
+
+    for (auto& word : words)
+        if (word.isNotEmpty())
+            word = word.substring (0, 1).toUpperCase() + word.substring (1);
+
+    return words.joinIntoString (" ");
+}
+
+struct EmbeddedExample
+{
+    juce::String name;
+    juce::String resourceName;
+};
+
+std::vector<EmbeddedExample> embeddedExamples()
+{
+    std::vector<EmbeddedExample> result;
+
+    for (int i = 0; i < AudioScripterExamples::namedResourceListSize; ++i)
+    {
+        const auto* resourceName = AudioScripterExamples::namedResourceList[i];
+        const auto* originalName = AudioScripterExamples::getNamedResourceOriginalFilename (resourceName);
+        const auto fileName = juce::File (juce::String (originalName)).getFileName();
+
+        if (! fileName.endsWithIgnoreCase (".ascr"))
+            continue;
+
+        result.push_back ({ prettifyExampleName (fileName), juce::String (resourceName) });
+    }
+
+    std::sort (result.begin(), result.end(), [] (const auto& a, const auto& b)
+    {
+        return a.name.compareNatural (b.name) < 0;
+    });
+
+    return result;
 }
 
 float mixf (float a, float b, float amount)
@@ -32,19 +88,20 @@ float wrapf (float x, float lo, float hi)
 
 float foldf (float x, float lo, float hi)
 {
+    x = finiteOrZero (x);
+
     if (hi <= lo)
         return lo;
 
-    auto y = x;
-    while (y < lo || y > hi)
-    {
-        if (y > hi)
-            y = hi - (y - hi);
-        else if (y < lo)
-            y = lo + (lo - y);
-    }
+    const auto width = hi - lo;
+    const auto period = width * 2.0f;
+    auto y = std::fmod (x - lo, period);
+    if (y < 0.0f)
+        y += period;
+    if (y > width)
+        y = period - y;
 
-    return y;
+    return lo + y;
 }
 
 float smoothstepf (float edge0, float edge1, float x)
@@ -94,7 +151,7 @@ void writeLaneState (EvalContext& ctx, juce::String functionName, int lane, floa
     if (ctx.persistentState == nullptr)
         return;
 
-    (*ctx.persistentState)[stateKey (std::move (functionName), lane)] = value;
+    (*ctx.persistentState)[stateKey (std::move (functionName), lane)] = finiteOrZero (value);
 }
 
 float readLaneStateSuffix (EvalContext& ctx, juce::String functionName, int lane, juce::String suffix)
@@ -114,7 +171,7 @@ void writeLaneStateSuffix (EvalContext& ctx, juce::String functionName, int lane
     if (ctx.persistentState == nullptr)
         return;
 
-    (*ctx.persistentState)[stateKeyWithSuffix (std::move (functionName), lane, std::move (suffix))] = value;
+    (*ctx.persistentState)[stateKeyWithSuffix (std::move (functionName), lane, std::move (suffix))] = finiteOrZero (value);
 }
 
 int laneFromArgs (const std::vector<float>& args, size_t index)
@@ -288,7 +345,7 @@ void registerBuiltins (FunctionRegistry& registry)
         if (rp < 0) rp += kMaxDelaySamples;
 
         const float y = buf[(size_t) rp];
-        buf[(size_t) wp] = x;
+        buf[(size_t) wp] = sanitizeAudio (x);
         wp = (wp + 1) % kMaxDelaySamples;
         return y;
     };
@@ -371,7 +428,7 @@ std::shared_ptr<const CompiledProgram> ScriptEngine::getProgramSnapshot() const
     return std::atomic_load(&activeProgram);
 }
 
-constexpr size_t kMaxPersistentStateEntries = 128;
+constexpr size_t kMaxPersistentStateEntries = 512;
 constexpr int kMaxInstructionsPerSample = 4096;
 
 void ScriptEngine::enforcePersistentStateLimit()
@@ -425,6 +482,8 @@ void ScriptEngine::processBlock (juce::AudioBuffer<float>& buffer, std::array<fl
         ctx.locals.clear();
         ctx.executionAborted = false;
         ctx.returnTriggered = false;
+        ctx.breakTriggered = false;
+        ctx.continueTriggered = false;
         ctx.returnValue = 0.0f;
         ctx.loopDepth = 0;
         ctx.recursionDepth = 0;
@@ -441,12 +500,15 @@ void ScriptEngine::processBlock (juce::AudioBuffer<float>& buffer, std::array<fl
 
         enforcePersistentStateLimit();
 
+        const auto safeOutL = sanitizeAudio (ctx.outL);
+        const auto safeOutR = sanitizeAudio (ctx.outR);
+
         if (numChannels > 0)
-            buffer.setSample (0, s, ctx.outL);
+            buffer.setSample (0, s, safeOutL);
         if (numChannels > 1)
-            buffer.setSample (1, s, ctx.outR);
+            buffer.setSample (1, s, safeOutR);
         for (int ch = 2; ch < numChannels; ++ch)
-            buffer.setSample (ch, s, 0.5f * (ctx.outL + ctx.outR));
+            buffer.setSample (ch, s, 0.5f * (safeOutL + safeOutR));
 
         ++sampleCounter;
     }
@@ -463,96 +525,22 @@ outR = tanh(inR * drive);
 
 juce::StringArray exampleNames()
 {
-    return {
-        "Transparent soft clip",
-        "Cross-feedback distortion",
-        "Time-ramp ring modulation",
-        "Low-pass morph",
-        "Wavefold shimmer",
-        "Stereo bit crush drift",
-        "Noisy transient gate",
-        "Rhythmic pulse gate",
-        "Envelope duck tremor"
-    };
+    juce::StringArray names;
+
+    for (const auto& example : embeddedExamples())
+        names.add (example.name);
+
+    return names;
 }
 
 juce::String exampleScript (int index)
 {
-    switch (index)
+    const auto examples = embeddedExamples();
+    if (index >= 0 && index < (int) examples.size())
     {
-        case 0:
-            return R"(# clean until peaks, then smooth saturation
-outL = tanh(inL * 2.7) * 0.7;
-outR = tanh(inR * 2.7) * 0.7;
-)";
-        case 1:
-            return R"(# channels influence each other for unstable stereo color
-xL = tanh(inL * 3.0 + inR * 1.7);
-xR = tanh(inR * 3.0 + inL * 1.7);
-outL = xL * 0.8;
-outR = xR * 0.8;
-)";
-        case 2:
-            return R"(# ring-mod whose modulator frequency keeps evolving with time
-phase = wrap(t * 0.31, 0.0, 1.0);
-mod = sin(6.2831853 * (80.0 + phase * 700.0) * t);
-outL = inL * mod;
-outR = inR * mod;
-)";
-        case 3:
-            return R"(# morph between dry and one-pole filtered signal
-amount = 0.5 + 0.5 * sin(t * 0.2);
-fL = lpf1(inL, 0.08, 0);
-fR = lpf1(inR, 0.08, 1);
-outL = mix(inL, fL, amount);
-outR = mix(inR, fR, amount);
-)";
-        case 4:
-            return R"(# fold + saturation for airy harmonic layers
-preL = inL * 5.0;
-preR = inR * 5.0;
-outL = tanh(fold(preL, -0.7, 0.7)) * 0.8;
-outR = tanh(fold(preR, -0.7, 0.7)) * 0.8;
-)";
-        case 5:
-            return R"(# moving lo-fi texture with independent stereo smoothers
-steps = 8.0 + 7.0 * sin(t * 0.29);
-cL = crush(inL, steps);
-cR = crush(inR, steps + 2.0);
-outL = slew(cL, 0.025, 0);
-outR = slew(cR, 0.020, 1);
-)";
-        case 6:
-            return R"(# emphasize transients with deterministic pseudo-noise texture
-envL = abs(inL);
-envR = abs(inR);
-gL = smoothstep(0.02, 0.25, envL);
-gR = smoothstep(0.02, 0.25, envR);
-n = noise(3.0 + p2 * 20.0) * (0.02 + p1 * 0.25);
-outL = inL + n * gL;
-outR = inR + n * gR;
-)";
-        case 7:
-            return R"(# synced pulse gating with blend control
-freq = 1.0 + p1 * 16.0;
-duty = 0.1 + p2 * 0.8;
-g = pulse(freq, duty);
-mask = gt(g, 0.0);
-outL = mix(inL * 0.15, inL, mask);
-outR = mix(inR * 0.15, inR, mask);
-)";
-        case 8:
-            return R"(# envelope follower ducks a moving tremolo
-envL = env(inL, 0.25, 0.01, 0);
-envR = env(inR, 0.25, 0.01, 1);
-mod = 0.5 + 0.5 * pulse(2.0 + p1 * 8.0, 0.5);
-depthL = clamp((1.0 - envL * (0.7 + p2)), 0.2, 1.0);
-depthR = clamp((1.0 - envR * (0.7 + p2)), 0.2, 1.0);
-outL = inL * mix(depthL, 1.0, mod);
-outR = inR * mix(depthR, 1.0, mod);
-)";
-        default:
-            break;
+        int dataSize = 0;
+        if (const auto* data = AudioScripterExamples::getNamedResource (examples[(size_t) index].resourceName.toRawUTF8(), dataSize))
+            return juce::String::fromUTF8 (data, dataSize);
     }
 
     return defaultScript();
@@ -562,7 +550,7 @@ juce::String helpText()
 {
     return juce::String::fromUTF8(R"(
         
-audio_scripter 0.0.8  —  https://krahd.github.io/audio_scripter/
+audio_scripter 0.0.9  —  https://krahd.github.io/audio_scripter/
 ----------------------------------------------------------------
 
 OVERVIEW
