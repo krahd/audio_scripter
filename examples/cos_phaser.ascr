@@ -6,19 +6,18 @@
 # p2 = 0.55
 # p3 = 0.45
 # p4 = 0.8
-# LFO-swept comb filter: cos LFO sweeps a notch for phaser-like sweeps
-# Notch = input minus filtered signal; color adds mild resonance peak
+# LFO-swept comb notches using short modulated delays.
 # p1 = sweep speed, p2 = sweep depth, p3 = color, p4 = wet
-dt = 1.0 / sr;
-state_lfoPhase = wrap(state_lfoPhase + (0.1 + p1 * 4.9) * dt, 0.0, 1.0);
-sweep = 0.5 + 0.5 * cos(6.2831853 * state_lfoPhase);
-coeff = 0.008 + sweep * p2 * 0.38;
-res = p3 * 0.4;
-filtL = lpf1(inL + state_resL * res, coeff, 0);
-filtR = lpf1(inR + state_resR * res, coeff, 1);
-state_resL = clamp(filtL, -1.5, 1.5);
-state_resR = clamp(filtR, -1.5, 1.5);
-combL = inL - filtL * (0.5 + res * 0.5);
-combR = inR - filtR * (0.5 + res * 0.5);
-outL = mix(inL, combL, p4);
-outR = mix(inR, combR, p4);
+rate = 0.08 + p1 * 2.8;
+sweepL = 0.5 + 0.5 * cos(6.2831853 * rate * t);
+sweepR = 0.5 + 0.5 * cos(6.2831853 * rate * t + 1.5708);
+base = 2.0 + p2 * 28.0;
+spread = 1.0 + p3 * 0.75;
+d1L = delay(inL, base + sweepL * 18.0, 0);
+d2L = delay(inL, base * 1.7 + (1.0 - sweepL) * 24.0, 1);
+d1R = delay(inR, base * spread + sweepR * 18.0, 2);
+d2R = delay(inR, base * 1.7 * spread + (1.0 - sweepR) * 24.0, 3);
+notchL = inL - (d1L + d2L) * (0.34 + p3 * 0.18);
+notchR = inR - (d1R + d2R) * (0.34 + p3 * 0.18);
+outL = mix(inL, tanh(notchL * (1.05 + p3 * 0.5)), p4);
+outR = mix(inR, tanh(notchR * (1.05 + p3 * 0.5)), p4);

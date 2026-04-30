@@ -1,15 +1,156 @@
 #include "ScriptParser.h"
 #include "ScriptEngine.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <regex>
 #include <sstream>
+#include <stdexcept>
+#include <vector>
 
 namespace
 {
+std::filesystem::path examplesDirectory()
+{
+#if defined(EXAMPLES_DIR)
+    return std::filesystem::path (EXAMPLES_DIR);
+#else
+    return std::filesystem::path ("examples");
+#endif
+}
+
+std::string readTextFile (const std::filesystem::path& path)
+{
+    std::ifstream in (path);
+    std::stringstream buffer;
+    buffer << in.rdbuf();
+    return buffer.str();
+}
+
+std::array<float, 8> macroDefaultsFromSource (const std::string& source)
+{
+    std::array<float, 8> macros {};
+    const std::regex re (R"(^\s*#\s*p([1-8])\s*=\s*([-+]?(?:\d+\.?\d*|\.\d+))\s*$)",
+                         std::regex::icase);
+    std::stringstream lines (source);
+    std::string line;
+    std::smatch match;
+
+    while (std::getline (lines, line))
+    {
+        if (! std::regex_match (line, match, re))
+            continue;
+
+        const auto idx = (int) (match[1].str()[0] - '1');
+        auto value = std::stof (match[2].str());
+        macros[(size_t) idx] = std::clamp (value, 0.0f, 1.0f);
+    }
+
+    return macros;
+}
+
+struct RenderResult
+{
+    std::vector<float> dryL;
+    std::vector<float> wetL;
+    float diffRms { 0.0f };
+    float outRms { 0.0f };
+    float tailRms { 0.0f };
+    float peak { 0.0f };
+};
+
+RenderResult renderExample (const std::string& source, std::array<float, 8> macros)
+{
+    constexpr double sampleRate = 44100.0;
+    constexpr int activeSamples = 16384;
+    constexpr int tailSamples = 2048;
+    constexpr int totalSamples = activeSamples + tailSamples;
+    constexpr int warmup = 1024;
+
+    scripting::ScriptEngine engine;
+    engine.reset (sampleRate);
+    auto r = engine.compileAndInstall (juce::String (source));
+    if (! r.ok)
+        throw std::runtime_error ("compile failed: " + r.errors.joinIntoString ("\n").toStdString());
+
+    juce::AudioBuffer<float> buf (2, totalSamples);
+    RenderResult result;
+    result.dryL.resize ((size_t) totalSamples);
+
+    for (int s = 0; s < totalSamples; ++s)
+    {
+        float l = 0.0f;
+        float rch = 0.0f;
+
+        if (s < activeSamples)
+        {
+            const auto t = (float) s / (float) sampleRate;
+            const auto burst = (s % 8192) < 4200 ? 1.0f : 0.42f;
+            l = burst * (0.20f * std::sin (2.0f * 3.14159265f * 110.0f * t)
+                       + 0.13f * std::sin (2.0f * 3.14159265f * 440.0f * t)
+                       + 0.06f * std::sin (2.0f * 3.14159265f * 1760.0f * t));
+            rch = burst * (0.18f * std::sin (2.0f * 3.14159265f * 123.0f * t)
+                         + 0.12f * std::sin (2.0f * 3.14159265f * 391.0f * t)
+                         + 0.05f * std::sin (2.0f * 3.14159265f * 1550.0f * t));
+        }
+
+        result.dryL[(size_t) s] = l;
+        buf.setSample (0, s, l);
+        buf.setSample (1, s, rch);
+    }
+
+    engine.processBlock (buf, macros);
+    result.wetL.resize ((size_t) totalSamples);
+
+    double diffEnergy = 0.0;
+    double outEnergy = 0.0;
+    double tailEnergy = 0.0;
+    int diffCount = 0;
+
+    for (int s = 0; s < totalSamples; ++s)
+    {
+        const auto out = buf.getSample (0, s);
+        result.wetL[(size_t) s] = out;
+        result.peak = std::max (result.peak, std::abs (out));
+
+        if (s >= warmup && s < activeSamples)
+        {
+            const auto d = out - result.dryL[(size_t) s];
+            diffEnergy += (double) d * (double) d;
+            outEnergy += (double) out * (double) out;
+            ++diffCount;
+        }
+
+        if (s >= activeSamples)
+            tailEnergy += (double) out * (double) out;
+    }
+
+    result.diffRms = diffCount > 0 ? (float) std::sqrt (diffEnergy / (double) diffCount) : 0.0f;
+    result.outRms = diffCount > 0 ? (float) std::sqrt (outEnergy / (double) diffCount) : 0.0f;
+    result.tailRms = (float) std::sqrt (tailEnergy / (double) tailSamples);
+    return result;
+}
+
+float rmsDifference (const std::vector<float>& a, const std::vector<float>& b)
+{
+    const auto n = std::min (a.size(), b.size());
+    if (n == 0)
+        return 0.0f;
+
+    double energy = 0.0;
+    for (size_t i = 0; i < n; ++i)
+    {
+        const auto d = a[i] - b[i];
+        energy += (double) d * (double) d;
+    }
+
+    return (float) std::sqrt (energy / (double) n);
+}
+
 int run()
 {
     {
@@ -98,11 +239,7 @@ outR = inR * state_gain;
 
     // Determine examples directory: prefer compile-time EXAMPLES_DIR (absolute),
     // otherwise fall back to a relative "examples" path.
-#if defined(EXAMPLES_DIR)
-    const std::filesystem::path examplesDir = std::filesystem::path (EXAMPLES_DIR);
-#else
-    const std::filesystem::path examplesDir = std::filesystem::path ("examples");
-#endif
+    const auto examplesDir = examplesDirectory();
 
     if (! std::filesystem::exists (examplesDir))
     {
@@ -115,12 +252,10 @@ outR = inR * state_gain;
         if (entry.path().extension() != ".ascr")
             continue;
 
-        std::ifstream in (entry.path());
-        std::stringstream buffer;
-        buffer << in.rdbuf();
+        const auto source = readTextFile (entry.path());
 
         scripting::ScriptParser parser;
-        const auto result = parser.parse (buffer.str());
+        const auto result = parser.parse (source);
         if (! result.errors.isEmpty())
         {
             std::cerr << "Expected example script to parse successfully: " << entry.path().string() << "\n";
@@ -299,11 +434,7 @@ int runEngineTests()
     }
 
     // --- example scripts: compile, execute without crash, produce output ---
-#if defined(EXAMPLES_DIR)
-    const std::filesystem::path examplesDir = std::filesystem::path (EXAMPLES_DIR);
-#else
-    const std::filesystem::path examplesDir = std::filesystem::path ("examples");
-#endif
+    const auto examplesDir = examplesDirectory();
 
     if (std::filesystem::exists (examplesDir))
     {
@@ -312,10 +443,7 @@ int runEngineTests()
             if (entry.path().extension() != ".ascr")
                 continue;
 
-            std::ifstream in (entry.path());
-            std::stringstream sbuf;
-            sbuf << in.rdbuf();
-            const std::string src = sbuf.str();
+            const std::string src = readTextFile (entry.path());
 
             scripting::ScriptEngine engine;
             engine.reset (44100.0);
@@ -351,6 +479,79 @@ int runEngineTests()
                 {
                     std::cerr << "Engine example test: NaN/Inf output in "
                               << entry.path().filename().string() << " at sample " << s << "\n";
+                    return 1;
+                }
+            }
+        }
+
+        const std::vector<std::string> auditedExamples {
+            "autowah.ascr",
+            "cos_phaser.ascr",
+            "envelope_duck_tremor.ascr",
+            "exp_compressor.ascr",
+            "harmonic_exciter.ascr",
+            "iter_fold.ascr",
+            "low_pass_morph.ascr"
+        };
+
+        RenderResult autowahRender;
+        bool haveAutowah = false;
+
+        for (const auto& name : auditedExamples)
+        {
+            const auto path = examplesDir / name;
+            if (! std::filesystem::exists (path))
+            {
+                std::cerr << "Engine example behavior test: missing " << name << "\n";
+                return 1;
+            }
+
+            const auto source = readTextFile (path);
+            auto rendered = renderExample (source, macroDefaultsFromSource (source));
+
+            if (rendered.outRms < 0.015f)
+            {
+                std::cerr << "Engine example behavior test: " << name
+                          << " output is unexpectedly quiet; rms=" << rendered.outRms << "\n";
+                return 1;
+            }
+
+            if (rendered.diffRms < 0.006f)
+            {
+                std::cerr << "Engine example behavior test: " << name
+                          << " is too close to dry signal; diff rms=" << rendered.diffRms << "\n";
+                return 1;
+            }
+
+            if (rendered.tailRms > 0.012f)
+            {
+                std::cerr << "Engine example behavior test: " << name
+                          << " leaves a non-delay tail; tail rms=" << rendered.tailRms << "\n";
+                return 1;
+            }
+
+            if (rendered.peak > 1.25f)
+            {
+                std::cerr << "Engine example behavior test: " << name
+                          << " peak is too hot; peak=" << rendered.peak << "\n";
+                return 1;
+            }
+
+            if (name == "autowah.ascr")
+            {
+                autowahRender = std::move (rendered);
+                haveAutowah = true;
+                continue;
+            }
+
+            if (haveAutowah)
+            {
+                const auto distanceFromAutowah = rmsDifference (rendered.wetL, autowahRender.wetL);
+                if (distanceFromAutowah < 0.010f)
+                {
+                    std::cerr << "Engine example behavior test: " << name
+                              << " renders too similarly to autowah; rms distance="
+                              << distanceFromAutowah << "\n";
                     return 1;
                 }
             }

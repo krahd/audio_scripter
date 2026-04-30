@@ -6,21 +6,24 @@
 # p2 = 0.3
 # p3 = 0.45
 # p4 = 0.8
-# Autowah: envelope follower drives low-pass cutoff for wah-like sweep
-# p1 = sensitivity, p2 = base cutoff, p3 = resonance, p4 = wet
-fn envToCoeff(amp) {
-    base = 0.003 + p2 * 0.04;
-    return clamp(base + amp * p1 * 0.5, 0.002, 0.48);
-}
+# Autowah: envelope follower sweeps a band-pass window, without feedback echo.
+# p1 = sensitivity, p2 = base cutoff, p3 = peak color, p4 = wet
+drive = 1.0 + p1 * 4.0;
+ampL = env(inL * drive, 0.018, 0.0012, 0);
+ampR = env(inR * drive, 0.018, 0.0012, 1);
 
-ampL = env(inL, 0.002, 0.0003, 0);
-ampR = env(inR, 0.002, 0.0003, 1);
-cfL = envToCoeff(ampL);
-cfR = envToCoeff(ampR);
-res = p3 * 0.5;
-filtL = lpf1(inL + state_fbL * res, cfL, 0);
-filtR = lpf1(inR + state_fbR * res, cfR, 1);
-state_fbL = filtL;
-state_fbR = filtR;
-outL = mix(inL, filtL, p4);
-outR = mix(inR, filtR, p4);
+sweepL = clamp(p2 * 0.18 + ampL * (0.16 + p1 * 0.42), 0.012, 0.62);
+sweepR = clamp(p2 * 0.18 + ampR * (0.16 + p1 * 0.42), 0.012, 0.62);
+lowCutL = clamp(sweepL * (0.18 + p3 * 0.42), 0.004, 0.34);
+lowCutR = clamp(sweepR * (0.18 + p3 * 0.42), 0.004, 0.34);
+highCutL = clamp(sweepL + 0.055 + p3 * 0.16, 0.03, 0.78);
+highCutR = clamp(sweepR + 0.055 + p3 * 0.16, 0.03, 0.78);
+
+wahL = bp1(inL, lowCutL, highCutL, 0);
+wahR = bp1(inR, lowCutR, highCutR, 1);
+bodyL = lpf1(inL, 0.03 + p2 * 0.08, 2);
+bodyR = lpf1(inR, 0.03 + p2 * 0.08, 3);
+wetL = tanh((wahL * (1.8 + p3 * 2.2) + bodyL * 0.25) * 1.4);
+wetR = tanh((wahR * (1.8 + p3 * 2.2) + bodyR * 0.25) * 1.4);
+outL = mix(inL, wetL, p4);
+outR = mix(inR, wetR, p4);

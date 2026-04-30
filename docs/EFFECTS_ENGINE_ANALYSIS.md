@@ -52,9 +52,9 @@ Short answer: **mostly yes** for the currently documented behavior.
    - cap is `128` entries; eviction removes `begin()` key (lexicographic-first), not LRU.
    - Typical scripts are fine, but heavy dynamic state-key usage can lose old values in non-obvious order.
 
-3. **If EXAMPLES_DIR fallback path is used, built-in example name/script indexing is inconsistent**
-   - `exampleNames()` and `exampleScript()` are offset/misaligned (soft clip appears under cross-feedback slot in fallback list).
-   - In normal builds with `EXAMPLES_DIR`, the filesystem examples are used and this mismatch is bypassed.
+3. **If EXAMPLES_DIR fallback path is used, the embedded fallback list is limited**
+   - `exampleNames()` and `exampleScript()` are aligned, but the embedded fallback list is only a small subset of the filesystem examples.
+   - In normal builds with `EXAMPLES_DIR`, the filesystem examples are used and this limitation is bypassed.
 
 ## Why many examples can sound very similar
 

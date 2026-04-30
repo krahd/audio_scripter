@@ -464,6 +464,7 @@ outR = tanh(inR * drive);
 juce::StringArray exampleNames()
 {
     return {
+        "Transparent soft clip",
         "Cross-feedback distortion",
         "Time-ramp ring modulation",
         "Low-pass morph",

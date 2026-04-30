@@ -7,9 +7,18 @@
 # Harmonic exciter: adds even harmonics via full-wave rectification of the high band
 # Adds air and presence without heavy distortion
 # p1 = excite amount, p2 = frequency threshold (low=all freq, high=highs only), p3 = dry/wet
-hiL = inL - lpf1(inL, 0.1 + p2 * 0.35, 0);
-hiR = inR - lpf1(inR, 0.1 + p2 * 0.35, 1);
-exciteL = abs(hiL) * p1 * 0.6;
-exciteR = abs(hiR) * p1 * 0.6;
-outL = mix(inL, inL + exciteL, p3);
-outR = mix(inR, inR + exciteR, p3);
+cut = 0.025 + p2 * 0.28;
+hiL = hp1(inL, cut, 0);
+hiR = hp1(inR, cut, 1);
+rectL = abs(hiL);
+rectR = abs(hiR);
+airL = hp1(rectL, 0.015 + p2 * 0.08, 2);
+airR = hp1(rectR, 0.015 + p2 * 0.08, 3);
+biteL = sat(hiL, 1.0 + p1 * 5.0, 1.0) - hiL * 0.45;
+biteR = sat(hiR, 1.0 + p1 * 5.0, 1.0) - hiR * 0.45;
+exciteL = (airL * 0.9 + biteL * 0.55) * p1;
+exciteR = (airR * 0.9 + biteR * 0.55) * p1;
+wetL = tanh(inL + exciteL * 1.6);
+wetR = tanh(inR + exciteR * 1.6);
+outL = mix(inL, wetL, p3);
+outR = mix(inR, wetR, p3);

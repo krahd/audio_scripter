@@ -4,15 +4,15 @@
 # p1 = 0.7
 # p2 = 0.48
 # p3 = 0.82
-# Animated low-pass morph with gentle resonant feedback
+# Animated low-pass morph with stable SVF color, no feedback smear
 lfo = 0.5 + 0.5 * sin(6.2831853 * (0.05 + p1 * 1.8) * t);
-coeff = 0.002 + lfo * 0.22;
-resAmt = p2 * 0.4;
-inResL = inL + state_resL * resAmt;
-inResR = inR + state_resR * resAmt;
-fL = lpf1(inResL, coeff, 0);
-fR = lpf1(inResR, coeff, 1);
-state_resL = fL;
-state_resR = fR;
-outL = mix(inL, fL, p3);
-outR = mix(inR, fR, p3);
+cut = 0.006 + lfo * (0.05 + p1 * 0.30);
+q = 0.35 + p2 * 1.15;
+lpL = svf(inL, cut, q, 0.0, 0);
+lpR = svf(inR, cut, q, 0.0, 1);
+bpL = svf(inL, cut, q, 1.0, 2);
+bpR = svf(inR, cut, q, 1.0, 3);
+colorL = mix(lpL, lpL + bpL * 0.45, p2);
+colorR = mix(lpR, lpR + bpR * 0.45, p2);
+outL = mix(inL, tanh(colorL * (1.0 + p2 * 0.8)), p3);
+outR = mix(inR, tanh(colorR * (1.0 + p2 * 0.8)), p3);
