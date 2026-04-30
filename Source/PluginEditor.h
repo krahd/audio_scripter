@@ -27,7 +27,7 @@ private:
     void showAboutBox();
     void appendToLog (const juce::String& message, juce::Colour colour = juce::Colours::lightgreen);
 
-    AudioScripterAudioProcessor& processor;
+    AudioScripterAudioProcessor& audioProcessor;
 
     juce::Label titleLabel;
     juce::HyperlinkButton websiteButton {

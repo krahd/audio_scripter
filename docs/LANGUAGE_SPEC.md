@@ -29,7 +29,14 @@ Scripts are hot-reloaded: press **Apply** in the plugin and the new script takes
 
 ## Your first script
 
-The minimal script is empty — audio passes through unchanged because `outL` and `outR` default to `inL` and `inR`.
+Scripts must contain at least one statement. The minimal explicit pass-through script is:
+
+```text
+outL = inL;
+outR = inR;
+```
+
+At the start of each sample `outL` and `outR` are already set to `inL` and `inR`, so a script can leave one side untouched deliberately, but a completely empty file is rejected to catch accidental loads.
 
 A simple drive/saturation effect:
 
@@ -145,6 +152,8 @@ Comparison operators return `1.0` for true, `0.0` for false and have lower prece
 | `a != b` | not equal |
 
 The comparison functions `gt`, `lt`, `ge`, `le`, `select` remain available and are equivalent:
+
+`==` and `!=` use a small floating-point tolerance (`1e-6`) so tiny rounding error does not break common control-flow checks.
 
 | Function | Equivalent |
 | --- | --- |
@@ -298,10 +307,10 @@ fn name(arg1, arg2, ...) {
 ```
 
 - Functions are defined at the top level of a script.
-- All arguments and local variables inside the function are scoped to the call.
+- Arguments and local variables inside the function are scoped to the call. Caller locals are not visible inside the function.
 - `return` exits the function with a value. A function that falls off the end returns `0.0`.
 - Functions can call other user-defined functions, but recursion depth is bounded (see [Safety limits](#safety-limits)).
-- User functions **cannot** read or write `state_` variables — use the `id`-lane primitives (e.g. `lpf1`, `slew`) for stateful operations inside functions.
+- User functions can read and write `state_` variables, so stateful helpers are possible. Keep state names specific to avoid accidental sharing between functions.
 
 ```text
 fn softClip(x, drive) {
@@ -376,7 +385,7 @@ All stateful filter primitives accept an optional integer `id` argument that sel
 | `bp1(x, hpCoeff, lpCoeff [, id])` | Band-pass: hp1 followed by lpf1 in series. `hpCoeff` controls the low cut; `lpCoeff` controls the high cut. |
 | `svf(x, cutoff, q, mode [, id])` | State-variable filter. `cutoff` is a normalised coefficient (0.001–0.99); `q` is resonance (min 0.05, default 0.7); `mode`: 0 = low-pass, 1 = band-pass, 2 = high-pass. |
 | `slew(target, speed [, id])` | Slew-rate limiter — moves toward `target` by at most `speed` units per sample. Useful for smoothing stepped or gated control signals. |
-| `env(x, attack, release [, id])` | Envelope follower. Tracks `abs(x)` with asymmetric smoothing. `attack` and `release` are per-sample coefficients (0 = instant, 1 = frozen). |
+| `env(x, attack, release [, id])` | Envelope follower. Tracks `abs(x)` with asymmetric smoothing. `attack` and `release` are per-sample coefficients (0 = frozen, 1 = instant). |
 
 **Choosing lpf1 coefficients from a cutoff frequency:**
 
@@ -389,7 +398,7 @@ outL = lpf1(inL, coeff, 0);
 
 | Function | Description |
 | --- | --- |
-| `delay(x, samples [, id])` | Delay line. Delays `x` by `samples` samples (clamped 1–96000). Each `id` lane has its own 96000-sample buffer. |
+| `delay(x, samples [, id])` | Fractional delay line. Delays `x` by `samples` samples (clamped 1–96000) with linear interpolation. Each `id` lane has its own 96000-sample buffer. |
 
 ```text
 # Short delay widener
@@ -518,7 +527,7 @@ outR = mix(inR, iterFold(inR, drive, iters), p3);
 | Maximum instructions per sample | 4096 |
 | Maximum loop depth | 1024 |
 | Maximum recursion depth | 64 |
-| Maximum persistent state entries | 128 |
+| Maximum persistent state entries | 512 |
 | Maximum delay buffer per lane | 96000 samples |
 
 When an instruction or depth limit is exceeded, execution is aborted for that sample and the output defaults to the unmodified input. The output panel in the plugin will show an error on compile; runtime budget overruns are silent (audio passes through).

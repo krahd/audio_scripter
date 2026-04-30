@@ -34,18 +34,24 @@ public:
     juce::String getLastError() const;
 
 private:
+    struct RuntimeState
+    {
+        std::map<juce::String, float> persistentState;
+        std::unordered_map<int, std::vector<float>> delayBuffers;
+        std::unordered_map<int, int> delayWritePositions;
+        uint64_t sampleCounter { 0 };
+    };
+
     std::shared_ptr<const CompiledProgram> getProgramSnapshot() const;
-    void enforcePersistentStateLimit();
+    void enforcePersistentStateLimit (RuntimeState& state);
 
     // Use a plain shared_ptr and the atomic helper functions
     // (std::atomic_store / std::atomic_load) for portability with libc++.
     std::shared_ptr<const CompiledProgram> activeProgram;
-    std::map<juce::String, float> persistentState;
-    std::unordered_map<int, std::vector<float>> delayBuffers;
-    std::unordered_map<int, int> delayWritePositions;
+    RuntimeState runtimeState;
     std::atomic<bool> stateResetRequested { false };
+    std::atomic<double> pendingSampleRate { 44100.0 };
     double currentSampleRate { 44100.0 };
-    uint64_t sampleCounter { 0 };
     juce::String lastError;
 };
 

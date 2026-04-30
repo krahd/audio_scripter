@@ -329,7 +329,7 @@ void registerBuiltins (FunctionRegistry& registry)
     {
         constexpr int kMaxDelaySamples = 96000;
         const auto x = getArg (a, 0);
-        const int samples = std::clamp ((int) std::lrint (getArg (a, 1, 1.0f)), 1, kMaxDelaySamples - 1);
+        const auto samples = clampf (finiteOrZero (getArg (a, 1, 1.0f)), 1.0f, (float) kMaxDelaySamples - 2.0f);
         const int lane = laneFromArgs (a, 2);
 
         if (ctx.delayBuffers == nullptr)
@@ -341,10 +341,16 @@ void registerBuiltins (FunctionRegistry& registry)
 
         auto& wp = (*ctx.delayWritePositions)[lane];
 
-        int rp = wp - samples;
-        if (rp < 0) rp += kMaxDelaySamples;
+        auto readPosition = (float) wp - samples;
+        while (readPosition < 0.0f)
+            readPosition += (float) kMaxDelaySamples;
+        while (readPosition >= (float) kMaxDelaySamples)
+            readPosition -= (float) kMaxDelaySamples;
 
-        const float y = buf[(size_t) rp];
+        const auto i0 = (int) std::floor (readPosition);
+        const auto i1 = (i0 + 1) % kMaxDelaySamples;
+        const auto frac = readPosition - (float) i0;
+        const auto y = mixf (buf[(size_t) i0], buf[(size_t) i1], frac);
         buf[(size_t) wp] = sanitizeAudio (x);
         wp = (wp + 1) % kMaxDelaySamples;
         return y;
@@ -402,12 +408,8 @@ ScriptEngine::CompileResult ScriptEngine::compileAndInstall (const juce::String&
 
 void ScriptEngine::reset (double sampleRate)
 {
-    currentSampleRate = sampleRate;
-    sampleCounter = 0;
-    persistentState.clear();
-    delayBuffers.clear();
-    delayWritePositions.clear();
-    stateResetRequested.store (false);
+    pendingSampleRate.store (sampleRate);
+    stateResetRequested.store (true);
 }
 
 juce::String ScriptEngine::getCurrentSource() const
@@ -431,20 +433,18 @@ std::shared_ptr<const CompiledProgram> ScriptEngine::getProgramSnapshot() const
 constexpr size_t kMaxPersistentStateEntries = 512;
 constexpr int kMaxInstructionsPerSample = 4096;
 
-void ScriptEngine::enforcePersistentStateLimit()
+void ScriptEngine::enforcePersistentStateLimit (RuntimeState& state)
 {
-    while (persistentState.size() > kMaxPersistentStateEntries)
-        persistentState.erase (persistentState.begin());
+    while (state.persistentState.size() > kMaxPersistentStateEntries)
+        state.persistentState.erase (state.persistentState.begin());
 }
 
 void ScriptEngine::processBlock (juce::AudioBuffer<float>& buffer, std::array<float, 8>& macros)
 {
     if (stateResetRequested.exchange (false))
     {
-        persistentState.clear();
-        delayBuffers.clear();
-        delayWritePositions.clear();
-        sampleCounter = 0;
+        currentSampleRate = pendingSampleRate.load();
+        runtimeState = {};
     }
 
     const auto program = getProgramSnapshot();
@@ -460,21 +460,21 @@ void ScriptEngine::processBlock (juce::AudioBuffer<float>& buffer, std::array<fl
 
     if (program == nullptr)
     {
-        sampleCounter += (uint64_t) numSamples;
+        runtimeState.sampleCounter += (uint64_t) numSamples;
         return;
     }
 
     EvalContext ctx;
     ctx.sr = (float) currentSampleRate;
     ctx.macros = &macros;
-    ctx.persistentState = &persistentState;
-    ctx.delayBuffers = &delayBuffers;
-    ctx.delayWritePositions = &delayWritePositions;
+    ctx.persistentState = &runtimeState.persistentState;
+    ctx.delayBuffers = &runtimeState.delayBuffers;
+    ctx.delayWritePositions = &runtimeState.delayWritePositions;
     ctx.functionRegistry = &program->program.functionRegistry;
 
     for (int s = 0; s < numSamples; ++s)
     {
-        ctx.t = (float) sampleCounter / (float) currentSampleRate;
+        ctx.t = (float) runtimeState.sampleCounter / (float) currentSampleRate;
         ctx.inL = numChannels > 0 ? buffer.getSample (0, s) : 0.0f;
         ctx.inR = numChannels > 1 ? buffer.getSample (1, s) : ctx.inL;
         ctx.outL = ctx.inL;
@@ -498,7 +498,13 @@ void ScriptEngine::processBlock (juce::AudioBuffer<float>& buffer, std::array<fl
                 break;
         }
 
-        enforcePersistentStateLimit();
+        if (ctx.executionAborted)
+        {
+            ctx.outL = ctx.inL;
+            ctx.outR = ctx.inR;
+        }
+
+        enforcePersistentStateLimit (runtimeState);
 
         const auto safeOutL = sanitizeAudio (ctx.outL);
         const auto safeOutR = sanitizeAudio (ctx.outR);
@@ -510,7 +516,7 @@ void ScriptEngine::processBlock (juce::AudioBuffer<float>& buffer, std::array<fl
         for (int ch = 2; ch < numChannels; ++ch)
             buffer.setSample (ch, s, 0.5f * (safeOutL + safeOutR));
 
-        ++sampleCounter;
+        ++runtimeState.sampleCounter;
     }
 }
 
@@ -548,11 +554,10 @@ juce::String exampleScript (int index)
 
 juce::String helpText()
 {
-    return juce::String::fromUTF8(R"(
+    return juce::String ("audio_scripter " AUDIO_SCRIPTER_VERSION_STRING "  -  https://krahd.github.io/audio_scripter/\n"
+                         "----------------------------------------------------------------\n")
+           + juce::String::fromUTF8(R"(
         
-audio_scripter 0.0.9  —  https://krahd.github.io/audio_scripter/
-----------------------------------------------------------------
-
 OVERVIEW
 
   The script runs once per audio sample, top to bottom.
@@ -661,7 +666,7 @@ DSP / CREATIVE FUNCTIONS
                           mode: 0=low-pass  1=band-pass  2=high-pass
                           id (optional) separates state per lane
 
-  delay(x, samples, id)  delay line — delays x by N samples
+  delay(x, samples, id)  fractional delay line — delays x by N samples
                           samples clamped 1–96000
                           id (optional) separates state per lane
 

@@ -18,7 +18,7 @@ For commercial release and trademark/usage specifics, always review latest Stein
 
 JUCE community + documentation consistently emphasize that audio-thread code should avoid blocking calls, memory allocation, and locks.
 
-For this prototype, script compilation happens outside audio processing, but script application currently uses a simple lock for safety of state mutation. A lock-free swap design is recommended in follow-up iterations.
+Script compilation happens outside audio processing. Compiled programs are published as atomic snapshots, and reset/sample-rate changes are published as atomic requests that the audio path consumes before processing the next block. Runtime DSP state remains audio-thread-owned.
 
 ## Chosen scripting direction
 

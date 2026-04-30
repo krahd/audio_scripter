@@ -155,7 +155,6 @@ bool exampleMayHaveTail (const std::string& name)
 {
     return name == "clean_doubler.ascr"
         || name == "chorus.ascr"
-        || name == "micro_delay_widen.ascr"
         || name == "ping_pong_delay.ascr"
         || name == "reverb.ascr"
         || name == "simple_delay.ascr";
@@ -408,6 +407,33 @@ int runEngineTests()
         }
     }
 
+    // --- delay: fractional times interpolate instead of zippering to integers ---
+    {
+        scripting::ScriptEngine engine;
+        engine.reset (44100.0);
+        auto r = engine.compileAndInstall ("outL = delay(inL, 1.5, 0); outR = outL;");
+        if (! r.ok)
+        {
+            std::cerr << "Engine fractional delay test: compile failed.\n";
+            return 1;
+        }
+
+        juce::AudioBuffer<float> buf (2, 4);
+        buf.clear();
+        buf.setSample (0, 0, 1.0f);
+
+        std::array<float, 8> macros {};
+        engine.processBlock (buf, macros);
+
+        if (std::abs (buf.getSample (0, 1) - 0.5f) > 1e-4f
+            || std::abs (buf.getSample (0, 2) - 0.5f) > 1e-4f)
+        {
+            std::cerr << "Engine fractional delay test: expected split impulse at samples 1/2, got "
+                      << buf.getSample (0, 1) << " " << buf.getSample (0, 2) << "\n";
+            return 1;
+        }
+    }
+
     // --- lpf1: a one-pole low-pass smooths a step from 0 to 1 ---
     {
         scripting::ScriptEngine engine;
@@ -439,6 +465,116 @@ int runEngineTests()
         {
             std::cerr << "Engine lpf1 test: after 8 samples value should be near 1, got "
                       << buf.getSample (0, 7) << "\n";
+            return 1;
+        }
+    }
+
+    // --- runaway scripts: aborted samples fall back to dry passthrough ---
+    {
+        scripting::ScriptEngine engine;
+        engine.reset (44100.0);
+        auto r = engine.compileAndInstall ("outL = 0.0; outR = 0.0; while (true) { state_spin = state_spin + 1.0; }");
+        if (! r.ok)
+        {
+            std::cerr << "Engine abort fallback test: compile failed.\n";
+            return 1;
+        }
+
+        juce::AudioBuffer<float> buf (2, 1);
+        buf.setSample (0, 0, 0.25f);
+        buf.setSample (1, 0, -0.5f);
+
+        std::array<float, 8> macros {};
+        engine.processBlock (buf, macros);
+
+        if (std::abs (buf.getSample (0, 0) - 0.25f) > 1e-5f
+            || std::abs (buf.getSample (1, 0) + 0.5f) > 1e-5f)
+        {
+            std::cerr << "Engine abort fallback test: expected dry passthrough, got "
+                      << buf.getSample (0, 0) << " " << buf.getSample (1, 0) << "\n";
+            return 1;
+        }
+    }
+
+    // --- user functions: locals are call-scoped, state_ remains shared DSP state ---
+    {
+        scripting::ScriptEngine engine;
+        engine.reset (44100.0);
+        auto r = engine.compileAndInstall (R"(
+x = 0.75;
+fn readOuter() {
+    return x;
+}
+fn bump(v) {
+    state_sum = state_sum + v;
+    return state_sum;
+}
+outL = readOuter();
+outR = bump(0.25);
+)");
+        if (! r.ok)
+        {
+            std::cerr << "Engine function scope test: compile failed.\n";
+            return 1;
+        }
+
+        juce::AudioBuffer<float> buf (2, 2);
+        buf.clear();
+        std::array<float, 8> macros {};
+        engine.processBlock (buf, macros);
+
+        if (std::abs (buf.getSample (0, 0)) > 1e-5f
+            || std::abs (buf.getSample (1, 0) - 0.25f) > 1e-5f
+            || std::abs (buf.getSample (1, 1) - 0.5f) > 1e-5f)
+        {
+            std::cerr << "Engine function scope test: unexpected output "
+                      << buf.getSample (0, 0) << " "
+                      << buf.getSample (1, 0) << " "
+                      << buf.getSample (1, 1) << "\n";
+            return 1;
+        }
+    }
+
+    // --- reset: runtime state and sample clock are swapped/reset on the audio path ---
+    {
+        scripting::ScriptEngine engine;
+        engine.reset (44100.0);
+        auto r = engine.compileAndInstall ("state_acc = state_acc + 1.0; outL = state_acc; outR = t;");
+        if (! r.ok)
+        {
+            std::cerr << "Engine reset test: compile failed.\n";
+            return 1;
+        }
+
+        juce::AudioBuffer<float> buf (2, 3);
+        buf.clear();
+        std::array<float, 8> macros {};
+        engine.processBlock (buf, macros);
+
+        if (std::abs (buf.getSample (0, 2) - 3.0f) > 1e-5f)
+        {
+            std::cerr << "Engine reset test: expected accumulated state before reset, got "
+                      << buf.getSample (0, 2) << "\n";
+            return 1;
+        }
+
+        engine.reset (48000.0);
+
+        juce::AudioBuffer<float> resetBuf (2, 1);
+        resetBuf.clear();
+        engine.processBlock (resetBuf, macros);
+
+        if (std::abs (resetBuf.getSample (0, 0) - 1.0f) > 1e-5f)
+        {
+            std::cerr << "Engine reset test: expected state to restart at 1 after reset, got "
+                      << resetBuf.getSample (0, 0) << "\n";
+            return 1;
+        }
+
+        if (std::abs (resetBuf.getSample (1, 0)) > 1e-5f)
+        {
+            std::cerr << "Engine reset test: expected sample clock to restart at 0 after reset, got "
+                      << resetBuf.getSample (1, 0) << "\n";
             return 1;
         }
     }

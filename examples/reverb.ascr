@@ -1,18 +1,19 @@
 #@p1: Decay
 #@p2: Room
 #@p3: Wet
-# p1 = 0.6
-# p2 = 0.5
-# p3 = 0.35
-# Schroeder 4-comb reverb: parallel feedback comb filters build a diffuse tail
-# Slightly different L/R delay times give natural stereo spread
+# p1 = 0.52
+# p2 = 0.46
+# p3 = 0.32
+# Diffused plate reverb: feedback combs feed two all-pass diffusers per side.
+# The tail is present but damped, avoiding the obvious ringing/echo pattern.
 # p1 = decay (feedback per cycle), p2 = room size, p3 = wet
-decay = 0.5 + p1 * 0.44;
-scale = 0.5 + p2 * 1.5;
-d1 = 1307.0 * scale;
-d2 = 1637.0 * scale;
-d3 = 1811.0 * scale;
-d4 = 1931.0 * scale;
+decay = 0.42 + p1 * 0.38;
+scale = 0.55 + p2 * 1.25;
+damp = 0.22 + (1.0 - p2) * 0.18;
+d1 = 1187.0 * scale;
+d2 = 1559.0 * scale;
+d3 = 1877.0 * scale;
+d4 = 2141.0 * scale;
 
 c1L = delay(inL + state_c1L * decay, d1,        0);
 c2L = delay(inL + state_c2L * decay, d2,        1);
@@ -25,7 +26,26 @@ c4R = delay(inR + state_c4R * decay, d4 * 1.01, 7);
 state_c1L = c1L; state_c2L = c2L; state_c3L = c3L; state_c4L = c4L;
 state_c1R = c1R; state_c2R = c2R; state_c3R = c3R; state_c4R = c4R;
 
-verbL = lpf1((c1L + c2L + c3L + c4L) * 0.25, 0.5, 0);
-verbR = lpf1((c1R + c2R + c3R + c4R) * 0.25, 0.5, 1);
+combL = lpf1((c1L + c2L + c3L + c4L) * 0.25, damp, 8);
+combR = lpf1((c1R + c2R + c3R + c4R) * 0.25, damp, 9);
+
+ap1InL = combL + state_ap1L * 0.52;
+ap1InR = combR + state_ap1R * 0.52;
+ap1DelayL = delay(ap1InL, 337.0 * scale, 10);
+ap1DelayR = delay(ap1InR, 421.0 * scale, 11);
+ap1L = ap1DelayL - combL * 0.52;
+ap1R = ap1DelayR - combR * 0.52;
+state_ap1L = ap1L;
+state_ap1R = ap1R;
+
+ap2InL = ap1L + state_ap2L * 0.38;
+ap2InR = ap1R + state_ap2R * 0.38;
+ap2DelayL = delay(ap2InL, 113.0 * scale, 12);
+ap2DelayR = delay(ap2InR, 149.0 * scale, 13);
+verbL = tanh(ap2DelayL - ap1L * 0.38);
+verbR = tanh(ap2DelayR - ap1R * 0.38);
+state_ap2L = verbL;
+state_ap2R = verbR;
+
 outL = mix(inL, verbL, p3);
 outR = mix(inR, verbR, p3);

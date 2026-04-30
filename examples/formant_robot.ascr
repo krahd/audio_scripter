@@ -1,0 +1,32 @@
+#@p1: Vowel
+#@p2: Robot
+#@p3: Grit
+#@p4: Wet
+# p1 = 0.54
+# p2 = 0.62
+# p3 = 0.44
+# p4 = 0.78
+# Animated formant robot: moving vowel peaks plus a controllable synthetic carrier.
+# No delay feedback, so the effect stays articulate instead of echo-like.
+vowel = 0.5 + 0.5 * sin(6.2831853 * (0.05 + p1 * 0.55) * t);
+robotHz = 38.0 + p2 * 190.0;
+carrier = mix(1.0, 0.55 + 0.45 * sin(6.2831853 * robotHz * t), p2);
+drive = 1.0 + p3 * 4.5;
+
+srcL = tanh(inL * drive) * carrier;
+srcR = tanh(inR * drive) * (0.55 + 0.45 * sin(6.2831853 * robotHz * t + 0.72));
+
+f1 = 0.018 + vowel * 0.075 + p1 * 0.02;
+f2 = 0.085 + (1.0 - vowel) * 0.18 + p2 * 0.03;
+f3 = 0.22 + vowel * 0.24 + p3 * 0.08;
+q = 0.75 + p2 * 1.45;
+
+bankL = svf(srcL, f1, q, 1.0, 0) * 1.35 + svf(srcL, f2, q * 0.82, 1.0, 2) * 0.92 + svf(srcL, f3, 0.55 + p3 * 0.9, 1.0, 4) * 0.42;
+bankR = svf(srcR, f1 * 1.06, q, 1.0, 1) * 1.35 + svf(srcR, f2 * 0.94, q * 0.82, 1.0, 3) * 0.92 + svf(srcR, f3 * 1.03, 0.55 + p3 * 0.9, 1.0, 5) * 0.42;
+
+bodyL = lpf1(srcL, 0.025 + p1 * 0.06, 6);
+bodyR = lpf1(srcR, 0.025 + p1 * 0.06, 7);
+wetL = tanh(bankL * (1.1 + p3 * 0.7) + bodyL * 0.22);
+wetR = tanh(bankR * (1.1 + p3 * 0.7) + bodyR * 0.22);
+outL = mix(inL, wetL, p4);
+outR = mix(inR, wetR, p4);

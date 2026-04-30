@@ -58,6 +58,7 @@ if (AUDIO_SCRIPTER_BUILD_PLUGIN)
   target_include_directories(audio_scripter PRIVATE Source)
 
   target_compile_definitions(audio_scripter PRIVATE
+    AUDIO_SCRIPTER_VERSION_STRING="${PROJECT_VERSION}"
     JUCE_WEB_BROWSER=0
     JUCE_USE_CURL=0)
 
@@ -97,6 +98,7 @@ if (AUDIO_SCRIPTER_BUILD_TESTS)
   target_include_directories(audio_scripter_parser_tests PRIVATE Source)
 
   target_compile_definitions(audio_scripter_parser_tests PRIVATE
+    AUDIO_SCRIPTER_VERSION_STRING="${PROJECT_VERSION}"
     JUCE_WEB_BROWSER=0
     JUCE_USE_CURL=0)
 

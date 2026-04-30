@@ -191,18 +191,16 @@ is a *ring buffer* (circular buffer):
 
 ```text
 buffer[writePos] = input;
-output = buffer[(writePos − delaySamples + bufferSize) % bufferSize];
+readPos = writePos - delaySamples;
+output = lerp(buffer[floor(readPos)], buffer[floor(readPos) + 1], frac(readPos));
 writePos = (writePos + 1) % bufferSize;
 ```
 
 A ring buffer of length N can hold any delay from 1 to N−1 samples. In
 audio_scripter, each `delay()` lane has a ring buffer of 96,000 samples
 (≈ 2.2 seconds at 44.1 kHz), stored in `ScriptEngine::delayBuffers`.
-
-> **Historical note.** Before version 1.2, the delay buffer was stored in the
-> general `persistentState` map as individual keyed entries. Because that map had a
-> 128-entry limit, any delay longer than ~60 samples silently corrupted. The current
-> implementation uses `std::vector<float>` ring buffers, allocated lazily per lane.
+Fractional read positions are linearly interpolated, which keeps modulated chorus,
+doubler, and flanger-style scripts from stepping between integer delay lengths.
 
 ### 3.7 Envelope followers
 
@@ -407,8 +405,8 @@ Two kinds of state survive between samples:
 3. **Delay buffers**: stored in `delayBuffers`, a
    `std::unordered_map<int, std::vector<float>>`. Each lane maps to a 96,000-sample
    ring buffer. Write positions are tracked in `delayWritePositions`. These are
-   separate from `persistentState` to avoid the 128-entry limit that would corrupt
-   long delay lines.
+   separate from `persistentState` so long delay lines do not consume user/DSP state
+   entries.
 
 All state is cleared whenever `compileAndInstall()` installs a new script
 (`stateResetRequested`) and whenever the host calls `reset()` (plugin reset or
@@ -548,23 +546,24 @@ their size is not limited.
 4. `locals` map — function parameters and local assignments
 5. `persistentState` map — `state_` prefixed variables
 
-Writing (`setValue`) updates `locals` if the name is already present there (function
-scope), otherwise updates `persistentState` for `state_*` names, or `locals`
+Writing (`setValue`) updates `outL`/`outR` directly, clamps and writes `p1`-`p8`
+macros, updates `persistentState` for `state_*` names, or writes ordinary locals
 for everything else.
 
 ### 7.3 Function call scoping
 
-User-defined functions share the same `locals` map as their caller (outer variables
-are visible inside functions). When a function is called:
+User-defined functions have call-scoped locals. Caller locals are not visible inside
+the function unless passed as arguments. When a function is called:
 
 1. The current `locals` map is saved.
-2. Function parameters are written into `locals`.
+2. `locals` is cleared and function parameters are written into it.
 3. The function body executes.
 4. The saved `locals` is restored.
 
-This means outer-scope variables that are not shadowed by a parameter name remain
-readable inside the function. `p1`–`p8` are always accessible because they come from
-the shared `macros` pointer, not `locals`.
+`p1`–`p8` are always accessible because they come from the shared `macros` pointer,
+not `locals`. `state_*` variables are also accessible because they live in
+`persistentState`, making stateful helper functions possible without leaking scratch
+locals back to the caller.
 
 ### 7.4 Safety limits
 
@@ -575,12 +574,11 @@ To prevent runaway scripts from stalling the audio thread:
 | `maxInstructions` | 4096 | Abort if too many nodes evaluated per sample |
 | `maxLoopDepth` | 1024 | Prevent deeply nested loops |
 | `maxRecursionDepth` | 64 | Prevent infinite recursion |
-| `kMaxPersistentStateEntries` | 128 | Cap the `persistentState` map size |
+| `kMaxPersistentStateEntries` | 512 | Cap the `persistentState` map size |
 
 If `maxInstructions` is exceeded, `executionAborted` is set and the current sample
-outputs silence (the pre-set `outL = inL`, `outR = inR` fallback is already gone by
-then if the script wrote to `outL`/`outR` — in practice scripts that hit this limit
-output the last partial result). The output panel shows an error on the next UI tick.
+falls back to dry passthrough (`outL = inL`, `outR = inR`) instead of emitting a
+partial result.
 
 ---
 
@@ -626,7 +624,7 @@ registry.builtins["myFilter"] = [] (EvalContext& ctx, const std::vector<float>& 
 
 ### 8.3 Delay builtin
 
-`delay(x, samples, lane)` uses a proper ring buffer:
+`delay(x, samples, lane)` uses a ring buffer with fractional read interpolation:
 
 ```cpp
 auto& buf = (*ctx.delayBuffers)[lane];
@@ -634,11 +632,11 @@ if ((int)buf.size() < kMaxDelaySamples)
     buf.assign(kMaxDelaySamples, 0.0f);   // lazy allocation
 
 auto& wp = (*ctx.delayWritePositions)[lane];
-int rp = wp - samples;
-if (rp < 0) rp += kMaxDelaySamples;
-
-float y = buf[rp];
-buf[wp]  = x;
+float readPosition = wrap(wp - samples, 0, kMaxDelaySamples);
+int i0 = floor(readPosition);
+int i1 = (i0 + 1) % kMaxDelaySamples;
+float y = mix(buf[i0], buf[i1], readPosition - i0);
+buf[wp] = sanitizeAudio(x);
 wp = (wp + 1) % kMaxDelaySamples;
 return y;
 ```
@@ -744,15 +742,15 @@ at configure time unless a local checkout is provided via `--juce-path`:
 ```cmake
 FetchContent_Declare(JUCE
   GIT_REPOSITORY https://github.com/juce-framework/JUCE.git
-  GIT_TAG        8.0.4)
+  GIT_TAG        8.0.8)
 FetchContent_MakeAvailable(JUCE)
 ```
 
 The plugin target is created with `juce_add_plugin(audio_scripter …)`.
 
-`EXAMPLES_DIR` is passed to the plugin as a compile definition so the editor can
-load `.ascr` files from the source tree at runtime (developer builds) while release
-builds fall back to embedded examples.
+Example `.ascr` files are embedded with `juce_add_binary_data`, so hosts can load the
+built plugin without depending on the source checkout. The parser test target receives
+`EXAMPLES_DIR` so tests can also scan the source files directly.
 
 ### 11.2 Quick build
 

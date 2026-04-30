@@ -96,9 +96,9 @@ done
 
 if [ "$RUN_TESTS" = true ]; then
   echo "Building tests..."
-  cmake --build "$WORKSPACE_ROOT/$BUILD_DIR" --config "$CONFIG" --target audio_scripter_parser_tests || true
+  cmake --build "$WORKSPACE_ROOT/$BUILD_DIR" --config "$CONFIG" --target audio_scripter_parser_tests
   echo "Running tests..."
-  ctest --test-dir "$WORKSPACE_ROOT/$BUILD_DIR" --output-on-failure || true
+  ctest --test-dir "$WORKSPACE_ROOT/$BUILD_DIR" --output-on-failure
 fi
 
 ARTIFACTS_DIR="$WORKSPACE_ROOT/$BUILD_DIR/audio_scripter_artefacts"
@@ -114,7 +114,7 @@ if [ "$INSTALL_PLUGINS" = true ]; then
 
   if [ -d "$AU_SRC" ]; then
     mkdir -p "$AU_DEST"
-    cp -R "$AU_SRC"/*.component "$AU_DEST/" || true
+    cp -R "$AU_SRC"/*.component "$AU_DEST/"
     echo "Copied AU components to $AU_DEST"
   else
     echo "No AU artifacts found in $AU_SRC"
@@ -122,7 +122,7 @@ if [ "$INSTALL_PLUGINS" = true ]; then
 
   if [ -d "$VST3_SRC" ]; then
     mkdir -p "$VST3_DEST"
-    cp -R "$VST3_SRC"/*.vst3 "$VST3_DEST/" || true
+    cp -R "$VST3_SRC"/*.vst3 "$VST3_DEST/"
     echo "Copied VST3 plugins to $VST3_DEST"
   else
     echo "No VST3 artifacts found in $VST3_SRC"
@@ -136,20 +136,20 @@ fi
 
 if [ "$PACKAGE" = true ]; then
   echo "Packaging artifacts..."
-  cd "$ARTIFACTS_DIR" || exit 0
+  cd "$ARTIFACTS_DIR"
   if [ -d "Standalone" ]; then
     zip_name="$WORKSPACE_ROOT/$BUILD_DIR/audio_scripter-Standalone-$CONFIG.zip"
-    zip -r "$zip_name" Standalone || true
+    zip -r "$zip_name" Standalone
     echo "Packaged Standalone -> $zip_name"
   fi
   if [ -d "VST3" ]; then
     zip_name="$WORKSPACE_ROOT/$BUILD_DIR/audio_scripter-VST3-$CONFIG.zip"
-    zip -r "$zip_name" VST3 || true
+    zip -r "$zip_name" VST3
     echo "Packaged VST3 -> $zip_name"
   fi
   if [ -d "AU" ]; then
     zip_name="$WORKSPACE_ROOT/$BUILD_DIR/audio_scripter-AU-$CONFIG.zip"
-    zip -r "$zip_name" AU || true
+    zip -r "$zip_name" AU
     echo "Packaged AU -> $zip_name"
   fi
 fi

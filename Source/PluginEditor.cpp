@@ -9,8 +9,9 @@ static std::string cp1252_to_utf8 (const std::string& in)
     std::string out;
     out.reserve (in.size() * 2);
 
-    for (unsigned char c : in)
+    for (char rawChar : in)
     {
+        const auto c = (unsigned char) rawChar;
         if (c < 0x80)
         {
             out.push_back ((char) c);
@@ -76,8 +77,9 @@ static juce::String loadTextFileFixEncoding (const juce::File& file)
     const std::string raw = ss.str();
 
     // If the raw bytes contain any CP1252-only control codes (0x80..0x9F), try CP1252 -> UTF-8 conversion.
-    for (unsigned char c : raw)
+    for (char rawChar : raw)
     {
+        const auto c = (unsigned char) rawChar;
         if (c >= 0x80 && c <= 0x9F)
             return juce::String (cp1252_to_utf8 (raw));
     }
@@ -131,21 +133,28 @@ static void applyMacroInitialValuesFromText (AudioScripterAudioProcessor& proces
     try
     {
         const std::string s = text.toStdString();
-        std::regex re ("\\bp([1-8])\\s*=\\s*([-+]?(?:\\d+\\.?\\d*|\\.\\d+))");
+        std::regex re ("^\\s*#\\s*p([1-8])\\s*=\\s*([-+]?(?:\\d+\\.?\\d*|\\.\\d+))\\s*$",
+                       std::regex::icase);
         std::smatch m;
-        auto it = s.cbegin();
-        while (std::regex_search (it, s.cend(), m, re))
+        std::stringstream lines (s);
+        std::string line;
+        while (std::getline (lines, line))
         {
+            if (! std::regex_match (line, m, re))
+                continue;
+
             const int idx = m[1].str()[0] - '1';
             double val = 0.0;
             try { val = std::stod (m[2].str()); } catch (...) { val = 0.0; }
-            if (val < 0.0) val = 0.0; if (val > 1.0) val = 1.0;
+            if (val < 0.0)
+                val = 0.0;
+            if (val > 1.0)
+                val = 1.0;
             if (idx >= 0 && idx < 8)
             {
                 if (auto* p = processorRef.getValueTreeState().getParameter (macroParamId (idx)))
                     p->setValueNotifyingHost ((float) val);
             }
-            it = m.suffix().first;
         }
     }
     catch (...) {}
@@ -184,13 +193,13 @@ static std::array<juce::String, 8> parseMacroLabelsFromText (const juce::String&
 
 
 AudioScripterAudioProcessorEditor::AudioScripterAudioProcessorEditor (AudioScripterAudioProcessor& p)
-    : AudioProcessorEditor (&p), processor (p)
+    : AudioProcessorEditor (&p), audioProcessor (p)
 {
     // allow host/standalone window to be resizable when supported
     setResizable (true, true);
     setResizeLimits (600, 350, 3840, 2400);
 
-    titleLabel.setText ("audio_scripter 0.0.9", juce::dontSendNotification);
+    titleLabel.setText ("audio_scripter " AUDIO_SCRIPTER_VERSION_STRING, juce::dontSendNotification);
     titleLabel.setJustificationType (juce::Justification::centredLeft);
     titleLabel.setFont (juce::FontOptions (18.0f, juce::Font::bold));
     addAndMakeVisible (titleLabel);
@@ -223,7 +232,7 @@ AudioScripterAudioProcessorEditor::AudioScripterAudioProcessorEditor (AudioScrip
     // Script-aware colour scheme with full token coverage from ScriptCodeTokeniser.
     scriptEditor->setColourScheme (codeTokeniser->getDefaultColourScheme());
     // initial content (fix encoding when loading from disk)
-    scriptEditor->loadContent (processor.getScript());
+    scriptEditor->loadContent (audioProcessor.getScript());
     addAndMakeVisible (*scriptEditor);
 
     outputPanel.setMultiLine (true);
@@ -272,7 +281,7 @@ AudioScripterAudioProcessorEditor::AudioScripterAudioProcessorEditor (AudioScrip
 
         macroAttachments.push_back (
             std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (
-                processor.getValueTreeState(), macroParamId (i), slider));
+                audioProcessor.getValueTreeState(), macroParamId (i), slider));
     }
 
     helpPanel = std::make_unique<juce::CodeEditorComponent> (helpDocument, codeTokeniser.get());
@@ -395,7 +404,7 @@ void AudioScripterAudioProcessorEditor::comboBoxChanged (juce::ComboBox* box)
 void AudioScripterAudioProcessorEditor::applyScript()
 {
     applyScriptMetadata();
-    const auto result = processor.setScript (scriptEditor->getDocument().getAllContent());
+    const auto result = audioProcessor.setScript (scriptEditor->getDocument().getAllContent());
 
     if (result.ok)
     {
@@ -412,7 +421,7 @@ void AudioScripterAudioProcessorEditor::applyScriptMetadata()
         return;
 
     const auto text = scriptEditor->getDocument().getAllContent();
-    applyMacroInitialValuesFromText (processor, text);
+    applyMacroInitialValuesFromText (audioProcessor, text);
     applyMacroLabelsFromText (text);
 }
 
@@ -489,7 +498,7 @@ void AudioScripterAudioProcessorEditor::showAboutBox()
     {
         AboutContent()
         {
-            title.setText ("audio_scripter 0.0.9", juce::dontSendNotification);
+            title.setText ("audio_scripter " AUDIO_SCRIPTER_VERSION_STRING, juce::dontSendNotification);
             title.setFont (juce::FontOptions (17.0f, juce::Font::bold));
             title.setJustificationType (juce::Justification::centred);
             title.setColour (juce::Label::textColourId, juce::Colour (0xff4ec9b0));

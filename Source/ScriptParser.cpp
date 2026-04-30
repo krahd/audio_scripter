@@ -8,6 +8,7 @@ namespace scripting
 namespace
 {
 constexpr int kMaxStatements = 256;
+constexpr float kEqualityTolerance = 1.0e-6f;
 
 float finiteOrZero (float x)
 {
@@ -79,14 +80,15 @@ struct BinaryExpr final : Expr
             case Op::lessEqual:    return l <= r ? 1.0f : 0.0f;
             case Op::greater:      return l >  r ? 1.0f : 0.0f;
             case Op::greaterEqual: return l >= r ? 1.0f : 0.0f;
-            case Op::equalEqual: return l == r ? 1.0f : 0.0f;
-            case Op::notEqual:   return l != r ? 1.0f : 0.0f;
+            case Op::equalEqual: return std::abs (l - r) <= kEqualityTolerance ? 1.0f : 0.0f;
+            case Op::notEqual:   return std::abs (l - r) >  kEqualityTolerance ? 1.0f : 0.0f;
             case Op::bitwiseAnd: return (float) ((int32_t) l & (int32_t) r);
             case Op::bitwiseOr:  return (float) ((int32_t) l | (int32_t) r);
             case Op::bitwiseXor: return (float) ((int32_t) l ^ (int32_t) r);
             case Op::shiftLeft:  return (float) ((int32_t) l << ((int32_t) r & 31));
             case Op::shiftRight: return (float) ((int32_t) l >> ((int32_t) r & 31));
-            default: break;
+            case Op::logicalAnd:
+            case Op::logicalOr:  break;
         }
 
         return 0.0f;
@@ -298,8 +300,13 @@ float FunctionCallExpr::evaluate (EvalContext& ctx) const
         auto savedLocals = ctx.locals;
         const auto previousReturnTriggered = ctx.returnTriggered;
         const auto previousReturnValue = ctx.returnValue;
+        const auto previousBreakTriggered = ctx.breakTriggered;
+        const auto previousContinueTriggered = ctx.continueTriggered;
 
+        ctx.locals.clear();
         ctx.returnTriggered = false;
+        ctx.breakTriggered = false;
+        ctx.continueTriggered = false;
         ctx.returnValue = 0.0f;
         ++ctx.recursionDepth;
 
@@ -312,6 +319,8 @@ float FunctionCallExpr::evaluate (EvalContext& ctx) const
         ctx.locals = std::move (savedLocals);
         ctx.returnTriggered = previousReturnTriggered;
         ctx.returnValue = previousReturnValue;
+        ctx.breakTriggered = previousBreakTriggered;
+        ctx.continueTriggered = previousContinueTriggered;
         --ctx.recursionDepth;
         return callValue;
     }
@@ -410,23 +419,20 @@ std::unique_ptr<Statement> ScriptParser::parseStatement()
 {
     const auto token = peek();
 
-    switch (token.type)
-    {
-        case TokenType::kw_if:     return parseIf();
-        case TokenType::kw_while:  return parseWhile();
-        case TokenType::kw_for:    return parseFor();
-        case TokenType::kw_fn:     return parseFunctionDef();
-        case TokenType::kw_return: return parseReturn();
-        case TokenType::kw_break:  return parseBreak();
-        case TokenType::kw_continue:return parseContinue();
-        case TokenType::leftBrace: return parseBlock();
-        case TokenType::identifier:return parseAssignmentOrExpr();
-        default:
-            errors->add ("Line " + juce::String (token.line)
-                         + ": unexpected token at statement start: '" + token.text + "'.");
-            consume();
-            return nullptr;
-    }
+    if (token.type == TokenType::kw_if)       return parseIf();
+    if (token.type == TokenType::kw_while)    return parseWhile();
+    if (token.type == TokenType::kw_for)      return parseFor();
+    if (token.type == TokenType::kw_fn)       return parseFunctionDef();
+    if (token.type == TokenType::kw_return)   return parseReturn();
+    if (token.type == TokenType::kw_break)    return parseBreak();
+    if (token.type == TokenType::kw_continue) return parseContinue();
+    if (token.type == TokenType::leftBrace)   return parseBlock();
+    if (token.type == TokenType::identifier)  return parseAssignmentOrExpr();
+
+    errors->add ("Line " + juce::String (token.line)
+                 + ": unexpected token at statement start: '" + token.text + "'.");
+    consume();
+    return nullptr;
 }
 
 std::unique_ptr<BlockStatement> ScriptParser::parseBlock()

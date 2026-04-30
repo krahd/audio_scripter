@@ -285,7 +285,8 @@
     </p>
 
     <h3>Minimal pass-through</h3>
-    <pre><span class="comment"># empty script — outL/outR default to inL/inR</span></pre>
+    <pre>outL = inL;
+outR = inR;</pre>
 
     <br>
     <h3>Macro-driven soft saturation</h3>
@@ -336,18 +337,20 @@ outR = <span class="fn">mix</span>(inR, procR, p4);</pre>
       </div>
 
       <div class="example-card">
-        <h3>Micro-delay widener</h3>
-        <pre><span class="comment"># @p1: Time  @p2: Cross  @p3: Width  @p4: Wet</span>
-base = <span class="num">8.0</span> + p1 * <span class="num">520.0</span>;
-cross = p2 * <span class="num">0.35</span>;
-spread = <span class="num">1.08</span> + p3 * <span class="num">0.75</span>;
-
-dL = <span class="fn">delay</span>(inL, base, <span class="num">0</span>);
-dR = <span class="fn">delay</span>(inR, base * spread, <span class="num">1</span>);
-wetL = dL * (<span class="num">1.0</span> - cross) + dR * cross;
-wetR = dR * (<span class="num">1.0</span> - cross) + dL * cross;
-outL = <span class="fn">mix</span>(inL, wetL, p4);
-outR = <span class="fn">mix</span>(inR, wetR, p4);</pre>
+        <h3>Formant robot</h3>
+        <pre><span class="comment"># @p1: Vowel  @p2: Robot  @p3: Grit  @p4: Wet</span>
+vowel = <span class="num">0.5</span> + <span class="num">0.5</span> * <span class="fn">sin</span>(<span class="num">6.2831853</span> * (<span class="num">0.05</span> + p1 * <span class="num">0.55</span>) * t);
+carrier = <span class="fn">mix</span>(<span class="num">1.0</span>, <span class="num">0.55</span> + <span class="num">0.45</span> * <span class="fn">sin</span>(<span class="num">6.2831853</span> * (<span class="num">38.0</span> + p2 * <span class="num">190.0</span>) * t), p2);
+srcL = <span class="fn">tanh</span>(inL * (<span class="num">1.0</span> + p3 * <span class="num">4.5</span>)) * carrier;
+srcR = <span class="fn">tanh</span>(inR * (<span class="num">1.0</span> + p3 * <span class="num">4.5</span>)) * carrier;
+f1 = <span class="num">0.018</span> + vowel * <span class="num">0.075</span> + p1 * <span class="num">0.02</span>;
+f2 = <span class="num">0.085</span> + (<span class="num">1.0</span> - vowel) * <span class="num">0.18</span> + p2 * <span class="num">0.03</span>;
+bankL = <span class="fn">svf</span>(srcL, f1, <span class="num">0.75</span> + p2 * <span class="num">1.45</span>, <span class="num">1.0</span>, <span class="num">0</span>)
+      + <span class="fn">svf</span>(srcL, f2, <span class="num">0.65</span> + p2, <span class="num">1.0</span>, <span class="num">2</span>);
+bankR = <span class="fn">svf</span>(srcR, f1 * <span class="num">1.06</span>, <span class="num">0.75</span> + p2 * <span class="num">1.45</span>, <span class="num">1.0</span>, <span class="num">1</span>)
+      + <span class="fn">svf</span>(srcR, f2 * <span class="num">0.94</span>, <span class="num">0.65</span> + p2, <span class="num">1.0</span>, <span class="num">3</span>);
+outL = <span class="fn">mix</span>(inL, <span class="fn">tanh</span>(bankL * (<span class="num">1.2</span> + p3)), p4);
+outR = <span class="fn">mix</span>(inR, <span class="fn">tanh</span>(bankR * (<span class="num">1.2</span> + p3)), p4);</pre>
       </div>
 
       <div class="example-card">
@@ -448,7 +451,7 @@ outR = <span class="fn">mix</span>(inR, dL, p3);</pre>
         <tr><td>env(x, atk, rel [, id])</td><td>Envelope follower with asymmetric smoothing</td></tr>
 
         <tr class="section-header"><td colspan="2">Delay &amp; saturation</td></tr>
-        <tr><td>delay(x, samples [, id])</td><td>Delay line — 1–96000 samples per lane</td></tr>
+        <tr><td>delay(x, samples [, id])</td><td>Fractional delay line — 1–96000 samples per lane, linearly interpolated</td></tr>
         <tr><td>sat(x, drive [, mode])</td><td>Soft-clipper: mode 0=tanh, 1=atan, 2=cubic</td></tr>
 
         <tr class="section-header"><td colspan="2">Operators (arithmetic, comparison, logical, bitwise)</td></tr>
