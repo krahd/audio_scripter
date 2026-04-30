@@ -6,6 +6,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 option(AUDIO_SCRIPTER_BUILD_TESTS "Build lightweight parser tests" ON)
 option(AUDIO_SCRIPTER_BUILD_PLUGIN "Build the JUCE plugin targets" ON)
+option(AUDIO_SCRIPTER_BUILD_TOOLS "Configure offline analysis/render tools" ON)
 
 set(AUDIO_SCRIPTER_JUCE_PATH "" CACHE PATH "Path to a local JUCE checkout (optional)")
 
@@ -22,14 +23,51 @@ else()
   FetchContent_MakeAvailable(juce)
 endif()
 
-if (AUDIO_SCRIPTER_BUILD_PLUGIN)
-  file(GLOB AUDIO_SCRIPTER_EXAMPLE_SOURCES CONFIGURE_DEPENDS
-    "${CMAKE_SOURCE_DIR}/examples/*.ascr")
+if (AUDIO_SCRIPTER_BUILD_TOOLS)
+  if (NOT TARGET audio_scripter_examples)
+    file(GLOB AUDIO_SCRIPTER_EXAMPLE_SOURCES CONFIGURE_DEPENDS
+      "${CMAKE_SOURCE_DIR}/examples/*.ascr")
 
-  juce_add_binary_data(audio_scripter_examples
-    NAMESPACE AudioScripterExamples
-    HEADER_NAME AudioScripterExampleData.h
-    SOURCES ${AUDIO_SCRIPTER_EXAMPLE_SOURCES})
+    juce_add_binary_data(audio_scripter_examples
+      NAMESPACE AudioScripterExamples
+      HEADER_NAME AudioScripterExampleData.h
+      SOURCES ${AUDIO_SCRIPTER_EXAMPLE_SOURCES})
+  endif()
+
+  add_executable(audio_scripter_render_report EXCLUDE_FROM_ALL
+    tools/RenderEffectReport.cpp
+    Source/ScriptParser.cpp
+    Source/ScriptTokenizer.cpp
+    Source/ScriptEngine.cpp)
+
+  target_include_directories(audio_scripter_render_report PRIVATE Source)
+
+  target_compile_definitions(audio_scripter_render_report PRIVATE
+    AUDIO_SCRIPTER_VERSION_STRING="${PROJECT_VERSION}"
+    JUCE_WEB_BROWSER=0
+    JUCE_USE_CURL=0
+    EXAMPLES_DIR="${CMAKE_SOURCE_DIR}/examples")
+
+  target_link_libraries(audio_scripter_render_report PRIVATE
+    audio_scripter_examples
+    juce::juce_audio_formats
+    juce::juce_audio_basics
+    juce::juce_core
+    juce::juce_recommended_config_flags
+    juce::juce_recommended_lto_flags
+    juce::juce_recommended_warning_flags)
+endif()
+
+if (AUDIO_SCRIPTER_BUILD_PLUGIN)
+  if (NOT TARGET audio_scripter_examples)
+    file(GLOB AUDIO_SCRIPTER_EXAMPLE_SOURCES CONFIGURE_DEPENDS
+      "${CMAKE_SOURCE_DIR}/examples/*.ascr")
+
+    juce_add_binary_data(audio_scripter_examples
+      NAMESPACE AudioScripterExamples
+      HEADER_NAME AudioScripterExampleData.h
+      SOURCES ${AUDIO_SCRIPTER_EXAMPLE_SOURCES})
+  endif()
 
   juce_add_plugin(audio_scripter
     COMPANY_NAME "Tomas Laurenzo"
