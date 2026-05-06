@@ -278,9 +278,7 @@ float FunctionCallExpr::evaluate (EvalContext& ctx) const
     if (ctx.functionRegistry == nullptr)
         return 0.0f;
 
-    const auto fnLower = functionName.toLowerCase();
-
-    if (const auto it = ctx.functionRegistry->builtins.find (fnLower); it != ctx.functionRegistry->builtins.end())
+    if (const auto it = ctx.functionRegistry->builtins.find (functionNameLower); it != ctx.functionRegistry->builtins.end())
         return it->second (ctx, values);
 
     if (const auto uit = ctx.functionRegistry->user.find (functionName); uit != ctx.functionRegistry->user.end() && uit->second != nullptr)
@@ -692,6 +690,7 @@ std::unique_ptr<Statement> ScriptParser::parseAssignmentOrExpr()
 
         auto call = std::make_unique<FunctionCallExpr>();
         call->functionName = id.text;
+        call->functionNameLower = id.text.toLowerCase();
         call->arguments = std::move (args);
 
         auto exprStmt = std::make_unique<ExpressionStatement>();
@@ -1006,6 +1005,7 @@ std::unique_ptr<Expr> ScriptParser::parsePrimary()
 
         auto call = std::make_unique<FunctionCallExpr>();
         call->functionName = token.text;
+        call->functionNameLower = token.text.toLowerCase();
         call->arguments = std::move (args);
         return call;
     }

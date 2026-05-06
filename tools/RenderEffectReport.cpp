@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <cmath>
 #include <filesystem>
 #include <fstream>
@@ -351,8 +352,19 @@ int main (int argc, char** argv)
             const auto macros = macroDefaultsFromSource (source);
             const auto stem = entry.path().stem().string();
 
+            const auto t0 = std::chrono::high_resolution_clock::now();
             const auto program = render (source, macros, dryProgram);
+            const auto t1 = std::chrono::high_resolution_clock::now();
             const auto impulse = render (source, macros, dryImpulse);
+            const auto t2 = std::chrono::high_resolution_clock::now();
+            const double progMs = std::chrono::duration<double, std::milli>(t1 - t0).count();
+            const double impMs = std::chrono::duration<double, std::milli>(t2 - t1).count();
+            const double progAudioSec = (double)dryProgram.getNumSamples() / kSampleRate;
+            const double rtFactor = progAudioSec / (progMs / 1000.0);
+            std::cout << entry.path().filename().string()
+                      << " program=" << progMs << "ms impulse=" << impMs << "ms"
+                      << " realtime=" << rtFactor << "x"
+                      << (rtFactor < 1.5 ? " <-- TOO SLOW" : "") << "\n";
             const auto dryProgramL = channelToVector (dryProgram, 0);
             const auto dryImpulseL = channelToVector (dryImpulse, 0);
             const auto programL = channelToVector (program, 0);

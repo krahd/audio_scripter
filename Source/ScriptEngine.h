@@ -36,7 +36,7 @@ public:
 private:
     struct RuntimeState
     {
-        std::map<juce::String, float> persistentState;
+        StringMap<float> persistentState;
         std::unordered_map<int, std::vector<float>> delayBuffers;
         std::unordered_map<int, int> delayWritePositions;
         uint64_t sampleCounter { 0 };

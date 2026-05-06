@@ -10,6 +10,14 @@
 
 namespace scripting
 {
+struct JuceStringHash
+{
+    size_t operator() (const juce::String& s) const noexcept { return (size_t) s.hashCode(); }
+};
+
+template <typename V>
+using StringMap = std::unordered_map<juce::String, V, JuceStringHash>;
+
 struct Expr;
 struct Statement;
 struct FunctionDefStatement;
@@ -37,8 +45,8 @@ struct EvalContext
     float t { 0.0f };
 
     std::array<float, kNumMacros>* macros { nullptr };
-    std::map<juce::String, float> locals;
-    std::map<juce::String, float>* persistentState { nullptr };
+    StringMap<float> locals;
+    StringMap<float>* persistentState { nullptr };
     const FunctionRegistry* functionRegistry { nullptr };
     std::unordered_map<int, std::vector<float>>* delayBuffers { nullptr };
     std::unordered_map<int, int>* delayWritePositions { nullptr };
@@ -83,6 +91,7 @@ struct BoolLiteralExpr : Expr
 struct FunctionCallExpr : Expr
 {
     juce::String functionName;
+    juce::String functionNameLower;
     std::vector<std::unique_ptr<Expr>> arguments;
 
     float evaluate (EvalContext&) const override;
@@ -168,8 +177,8 @@ using BuiltinFunction = std::function<float (EvalContext&, const std::vector<flo
 
 struct FunctionRegistry
 {
-    std::map<juce::String, BuiltinFunction> builtins;
-    std::map<juce::String, FunctionDefStatement*> user;
+    StringMap<BuiltinFunction> builtins;
+    StringMap<FunctionDefStatement*> user;
 };
 
 struct Program

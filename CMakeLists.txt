@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(audio_scripter VERSION 0.0.9)
+project(audio_scripter VERSION 0.0.10)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
