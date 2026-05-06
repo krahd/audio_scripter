@@ -37,6 +37,7 @@ private:
     struct RuntimeState
     {
         StringMap<float> persistentState;
+        std::vector<float> persistentStateSlots;
         std::unordered_map<int, std::vector<float>> delayBuffers;
         std::unordered_map<int, int> delayWritePositions;
         uint64_t sampleCounter { 0 };

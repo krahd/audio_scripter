@@ -3,5 +3,5 @@
 inline constexpr int kNumMacros = 8;
 
 #ifndef AUDIO_SCRIPTER_VERSION_STRING
-#define AUDIO_SCRIPTER_VERSION_STRING "0.0.10"
+#define AUDIO_SCRIPTER_VERSION_STRING "0.0.11"
 #endif

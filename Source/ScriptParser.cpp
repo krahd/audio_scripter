@@ -36,10 +36,10 @@ struct NumberExpr final : Expr
 
 struct VariableExpr final : Expr
 {
-    explicit VariableExpr (juce::String n) : name (std::move (n)) {}
-    float evaluate (EvalContext& ctx) const override { return ctx.getValue (name); }
+    explicit VariableExpr (VarRef r) : ref (std::move (r)) {}
+    float evaluate (EvalContext& ctx) const override { return ctx.getValue (ref); }
 
-    juce::String name;
+    VarRef ref;
 };
 
 struct BinaryExpr final : Expr
@@ -195,7 +195,7 @@ void ForStatement::execute (EvalContext& ctx) const
 
     while (! ctx.executionAborted && ! ctx.returnTriggered)
     {
-        ctx.locals[varName] = i;
+        ctx.setValue (loopVar, i);
 
         const auto cond = isLegacyRangeLoop
                             ? (i < legacyEnd ? 1.0f : 0.0f)
@@ -256,7 +256,7 @@ void AssignmentStatement::execute (EvalContext& ctx) const
         return;
 
     if (expression != nullptr)
-        ctx.setValue (variableName, expression->evaluate (ctx));
+        ctx.setValue (variable, expression->evaluate (ctx));
 }
 
 void ExpressionStatement::execute (EvalContext& ctx) const
@@ -270,30 +270,47 @@ void ExpressionStatement::execute (EvalContext& ctx) const
 
 float FunctionCallExpr::evaluate (EvalContext& ctx) const
 {
-    std::vector<float> values;
+    if ((int) ctx.callArgFrames.size() <= ctx.callArgDepth)
+        ctx.callArgFrames.emplace_back();
+
+    auto& values = ctx.callArgFrames[(size_t) ctx.callArgDepth++];
+    values.clear();
     values.reserve (arguments.size());
     for (const auto& arg : arguments)
         values.push_back (arg != nullptr ? arg->evaluate (ctx) : 0.0f);
 
     if (ctx.functionRegistry == nullptr)
+    {
+        --ctx.callArgDepth;
         return 0.0f;
+    }
 
     if (const auto it = ctx.functionRegistry->builtins.find (functionNameLower); it != ctx.functionRegistry->builtins.end())
+    {
+        --ctx.callArgDepth;
         return it->second (ctx, values);
+    }
 
     if (const auto uit = ctx.functionRegistry->user.find (functionName); uit != ctx.functionRegistry->user.end() && uit->second != nullptr)
     {
         if (ctx.recursionDepth >= ctx.maxRecursionDepth)
         {
             ctx.executionAborted = true;
+            --ctx.callArgDepth;
             return 0.0f;
         }
 
         auto* fn = uit->second;
         if (fn->body == nullptr)
+        {
+            --ctx.callArgDepth;
             return 0.0f;
+        }
         if (values.size() != fn->parameters.size())
+        {
+            --ctx.callArgDepth;
             return 0.0f;
+        }
 
         auto savedLocals = ctx.locals;
         const auto previousReturnTriggered = ctx.returnTriggered;
@@ -301,15 +318,15 @@ float FunctionCallExpr::evaluate (EvalContext& ctx) const
         const auto previousBreakTriggered = ctx.breakTriggered;
         const auto previousContinueTriggered = ctx.continueTriggered;
 
-        ctx.locals.clear();
+    std::fill (ctx.locals.begin(), ctx.locals.end(), 0.0f);
         ctx.returnTriggered = false;
         ctx.breakTriggered = false;
         ctx.continueTriggered = false;
         ctx.returnValue = 0.0f;
         ++ctx.recursionDepth;
 
-        for (size_t i = 0; i < fn->parameters.size(); ++i)
-            ctx.locals[fn->parameters[i]] = i < values.size() ? values[i] : 0.0f;
+        for (size_t i = 0; i < fn->parameterSlots.size(); ++i)
+            ctx.setValue ({ VarKind::Local, fn->parameterSlots[i], {} }, i < values.size() ? values[i] : 0.0f);
 
         fn->body->execute (ctx);
 
@@ -320,70 +337,96 @@ float FunctionCallExpr::evaluate (EvalContext& ctx) const
         ctx.breakTriggered = previousBreakTriggered;
         ctx.continueTriggered = previousContinueTriggered;
         --ctx.recursionDepth;
+        --ctx.callArgDepth;
         return callValue;
     }
 
+    --ctx.callArgDepth;
     return 0.0f;
 }
 
-float EvalContext::getValue (const juce::String& name) const
+float EvalContext::getValue (const VarRef& ref) const
 {
-    if (name == "inL")  return inL;
-    if (name == "inR")  return inR;
-    if (name == "outL") return outL;
-    if (name == "outR") return outR;
-    if (name == "sr")   return sr;
-    if (name == "t")    return t;
-
-    if (macros != nullptr)
+    switch (ref.kind)
     {
-        if (name == "p1") return (*macros)[0];
-        if (name == "p2") return (*macros)[1];
-        if (name == "p3") return (*macros)[2];
-        if (name == "p4") return (*macros)[3];
-        if (name == "p5") return (*macros)[4];
-        if (name == "p6") return (*macros)[5];
-        if (name == "p7") return (*macros)[6];
-        if (name == "p8") return (*macros)[7];
+        case VarKind::Input:
+            if (ref.slot == 0) return inL;
+            if (ref.slot == 1) return inR;
+            return 0.0f;
+
+        case VarKind::Output:
+            if (ref.slot == 0) return outL;
+            if (ref.slot == 1) return outR;
+            return 0.0f;
+
+        case VarKind::SampleRate:
+            return sr;
+
+        case VarKind::Time:
+            return t;
+
+        case VarKind::Macro:
+            if (macros != nullptr && ref.slot >= 0 && ref.slot < kNumMacros)
+                return (*macros)[(size_t) ref.slot];
+            return 0.0f;
+
+        case VarKind::Local:
+            if (ref.slot >= 0 && ref.slot < (int) locals.size())
+                return locals[(size_t) ref.slot];
+            return 0.0f;
+
+        case VarKind::State:
+            if (stateSlots != nullptr && ref.slot >= 0 && ref.slot < (int) stateSlots->size())
+                return (*stateSlots)[(size_t) ref.slot];
+            return 0.0f;
+
+        case VarKind::Unknown:
+            break;
     }
 
-    if (const auto it = locals.find (name); it != locals.end())
-        return it->second;
-
-    if (persistentState != nullptr)
-        if (const auto it = persistentState->find (name); it != persistentState->end())
-            return it->second;
-
     return 0.0f;
 }
 
-void EvalContext::setValue (const juce::String& name, float value)
+void EvalContext::setValue (const VarRef& ref, float value)
 {
     value = finiteOrZero (value);
 
-    if (name == "outL") { outL = value; return; }
-    if (name == "outR") { outR = value; return; }
-    if (macros != nullptr)
+    switch (ref.kind)
     {
-        const auto clamped = std::clamp (value, 0.0f, 1.0f);
-        if (name == "p1") { (*macros)[0] = clamped; return; }
-        if (name == "p2") { (*macros)[1] = clamped; return; }
-        if (name == "p3") { (*macros)[2] = clamped; return; }
-        if (name == "p4") { (*macros)[3] = clamped; return; }
-        if (name == "p5") { (*macros)[4] = clamped; return; }
-        if (name == "p6") { (*macros)[5] = clamped; return; }
-        if (name == "p7") { (*macros)[6] = clamped; return; }
-        if (name == "p8") { (*macros)[7] = clamped; return; }
-    }
+        case VarKind::Output:
+            if (ref.slot == 0) outL = value;
+            else if (ref.slot == 1) outR = value;
+            return;
 
-    if (name.startsWith ("state_"))
-    {
-        if (persistentState != nullptr)
-            (*persistentState)[name] = value;
-        return;
-    }
+        case VarKind::Macro:
+            if (macros != nullptr && ref.slot >= 0 && ref.slot < kNumMacros)
+                (*macros)[(size_t) ref.slot] = std::clamp (value, 0.0f, 1.0f);
+            return;
 
-    locals[name] = value;
+        case VarKind::Local:
+            if (ref.slot >= 0)
+            {
+                if ((size_t) ref.slot >= locals.size())
+                    locals.resize ((size_t) ref.slot + 1, 0.0f);
+                locals[(size_t) ref.slot] = value;
+            }
+            return;
+
+        case VarKind::State:
+            if (stateSlots != nullptr && ref.slot >= 0)
+            {
+                if ((size_t) ref.slot >= stateSlots->size())
+                    stateSlots->resize ((size_t) ref.slot + 1, 0.0f);
+                (*stateSlots)[(size_t) ref.slot] = value;
+            }
+            return;
+
+        case VarKind::Input:
+        case VarKind::SampleRate:
+        case VarKind::Time:
+        case VarKind::Unknown:
+            return;
+    }
 }
 
 ParseResult ScriptParser::parse (const juce::String& source)
@@ -391,6 +434,9 @@ ParseResult ScriptParser::parse (const juce::String& source)
     ParseResult result;
     tokenizer = std::make_unique<ScriptTokenizer> (source);
     errors = &result.errors;
+    localSlots.clear();
+    stateSlots.clear();
+    stateSlotNames.clear();
 
     while (peek().type != TokenType::end)
     {
@@ -409,6 +455,9 @@ ParseResult ScriptParser::parse (const juce::String& source)
 
     if (result.program.statements.empty())
         errors->add ("Script is empty. Add at least one statement.");
+
+    result.program.localSlotCount = (int) localSlots.size();
+    result.program.stateSlotNames = stateSlotNames;
 
     return result;
 }
@@ -552,7 +601,7 @@ std::unique_ptr<Statement> ScriptParser::parseFor()
     auto body = parseStatement();
 
     auto node = std::make_unique<ForStatement>();
-    node->varName = id.text;
+    node->loopVar = resolveVariableRef (id.text);
     node->startExpr = std::move (start);
     node->conditionExpr = std::move (condition);
     node->stepExpr = std::move (step);
@@ -576,6 +625,7 @@ std::unique_ptr<Statement> ScriptParser::parseFunctionDef()
         return nullptr;
 
     std::vector<juce::String> params;
+    std::vector<int> parameterSlots;
 
     if (peek().type != TokenType::rightParen)
     {
@@ -589,6 +639,7 @@ std::unique_ptr<Statement> ScriptParser::parseFunctionDef()
             }
 
             params.push_back (param.text);
+            parameterSlots.push_back (getOrCreateLocalSlot (param.text));
             if (peek().type == TokenType::comma)
             {
                 consume();
@@ -607,6 +658,7 @@ std::unique_ptr<Statement> ScriptParser::parseFunctionDef()
     auto node = std::make_unique<FunctionDefStatement>();
     node->name = id.text;
     node->parameters = std::move (params);
+    node->parameterSlots = std::move (parameterSlots);
     node->body = std::move (body);
     return node;
 }
@@ -652,7 +704,7 @@ std::unique_ptr<Statement> ScriptParser::parseAssignmentOrExpr()
             return nullptr;
 
         auto node = std::make_unique<AssignmentStatement>();
-        node->variableName = id.text;
+        node->variable = resolveVariableRef (id.text);
         node->expression = std::move (expr);
         return node;
     }
@@ -702,7 +754,7 @@ std::unique_ptr<Statement> ScriptParser::parseAssignmentOrExpr()
         return nullptr;
 
     auto exprStmt = std::make_unique<ExpressionStatement>();
-    exprStmt->expression = std::make_unique<VariableExpr> (id.text);
+    exprStmt->expression = std::make_unique<VariableExpr> (resolveVariableRef (id.text));
     return exprStmt;
 }
 
@@ -976,7 +1028,7 @@ std::unique_ptr<Expr> ScriptParser::parsePrimary()
     if (token.type == TokenType::identifier)
     {
         if (peek().type != TokenType::leftParen)
-            return std::make_unique<VariableExpr> (token.text);
+            return std::make_unique<VariableExpr> (resolveVariableRef (token.text));
 
         consume();
 
@@ -1044,5 +1096,48 @@ Token ScriptParser::consume()
 Token ScriptParser::peek()
 {
     return tokenizer->peek();
+}
+
+VarRef ScriptParser::resolveVariableRef (const juce::String& name)
+{
+    if (name == "inL")  return { VarKind::Input, 0, {} };
+    if (name == "inR")  return { VarKind::Input, 1, {} };
+    if (name == "outL") return { VarKind::Output, 0, {} };
+    if (name == "outR") return { VarKind::Output, 1, {} };
+    if (name == "sr")   return { VarKind::SampleRate, 0, {} };
+    if (name == "t")    return { VarKind::Time, 0, {} };
+
+    if (name.length() == 2 && name[0] == 'p')
+    {
+        const auto d = (int) name[1] - (int) '1';
+        if (d >= 0 && d < kNumMacros)
+            return { VarKind::Macro, d, {} };
+    }
+
+    if (name.startsWith ("state_"))
+        return { VarKind::State, getOrCreateStateSlot (name), {} };
+
+    return { VarKind::Local, getOrCreateLocalSlot (name), {} };
+}
+
+int ScriptParser::getOrCreateLocalSlot (const juce::String& name)
+{
+    if (const auto it = localSlots.find (name); it != localSlots.end())
+        return it->second;
+
+    const auto slot = (int) localSlots.size();
+    localSlots[name] = slot;
+    return slot;
+}
+
+int ScriptParser::getOrCreateStateSlot (const juce::String& name)
+{
+    if (const auto it = stateSlots.find (name); it != stateSlots.end())
+        return it->second;
+
+    const auto slot = (int) stateSlots.size();
+    stateSlots[name] = slot;
+    stateSlotNames.push_back (name);
+    return slot;
 }
 } // namespace scripting

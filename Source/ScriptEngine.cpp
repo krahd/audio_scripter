@@ -464,13 +464,20 @@ void ScriptEngine::processBlock (juce::AudioBuffer<float>& buffer, std::array<fl
         return;
     }
 
+    if ((int) runtimeState.persistentStateSlots.size() != (int) program->program.stateSlotNames.size())
+        runtimeState.persistentStateSlots.resize (program->program.stateSlotNames.size(), 0.0f);
+
     EvalContext ctx;
     ctx.sr = (float) currentSampleRate;
     ctx.macros = &macros;
+    ctx.locals.resize ((size_t) std::max (0, program->program.localSlotCount), 0.0f);
+    ctx.stateSlots = &runtimeState.persistentStateSlots;
     ctx.persistentState = &runtimeState.persistentState;
     ctx.delayBuffers = &runtimeState.delayBuffers;
     ctx.delayWritePositions = &runtimeState.delayWritePositions;
     ctx.functionRegistry = &program->program.functionRegistry;
+    ctx.callArgFrames.clear();
+    ctx.callArgDepth = 0;
 
     for (int s = 0; s < numSamples; ++s)
     {
@@ -479,7 +486,7 @@ void ScriptEngine::processBlock (juce::AudioBuffer<float>& buffer, std::array<fl
         ctx.inR = numChannels > 1 ? buffer.getSample (1, s) : ctx.inL;
         ctx.outL = ctx.inL;
         ctx.outR = ctx.inR;
-        ctx.locals.clear();
+        std::fill (ctx.locals.begin(), ctx.locals.end(), 0.0f);
         ctx.executionAborted = false;
         ctx.returnTriggered = false;
         ctx.breakTriggered = false;

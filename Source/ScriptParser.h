@@ -23,6 +23,25 @@ struct Statement;
 struct FunctionDefStatement;
 struct FunctionRegistry;
 
+enum class VarKind
+{
+    Input,
+    Output,
+    SampleRate,
+    Time,
+    Macro,
+    Local,
+    State,
+    Unknown
+};
+
+struct VarRef
+{
+    VarKind kind { VarKind::Unknown };
+    int slot { -1 };
+    juce::String name;
+};
+
 struct EvalContext
 {
     int loopDepth { 0 };
@@ -45,14 +64,17 @@ struct EvalContext
     float t { 0.0f };
 
     std::array<float, kNumMacros>* macros { nullptr };
-    StringMap<float> locals;
+    std::vector<float> locals;
+    std::vector<float>* stateSlots { nullptr };
     StringMap<float>* persistentState { nullptr };
     const FunctionRegistry* functionRegistry { nullptr };
     std::unordered_map<int, std::vector<float>>* delayBuffers { nullptr };
     std::unordered_map<int, int>* delayWritePositions { nullptr };
+    std::vector<std::vector<float>> callArgFrames;
+    int callArgDepth { 0 };
 
-    float getValue (const juce::String&) const;
-    void setValue (const juce::String&, float);
+    float getValue (const VarRef&) const;
+    void setValue (const VarRef&, float);
 };
 
 enum class ValueType
@@ -127,7 +149,7 @@ struct WhileStatement : Statement
 
 struct ForStatement : Statement
 {
-    juce::String varName;
+    VarRef loopVar;
     std::unique_ptr<Expr> startExpr;
     std::unique_ptr<Expr> conditionExpr;
     std::unique_ptr<Expr> stepExpr;
@@ -140,6 +162,7 @@ struct FunctionDefStatement : Statement
 {
     juce::String name;
     std::vector<juce::String> parameters;
+    std::vector<int> parameterSlots;
     std::unique_ptr<BlockStatement> body;
     void execute (EvalContext&) const override;
 };
@@ -162,7 +185,7 @@ struct ContinueStatement : Statement
 
 struct AssignmentStatement : Statement
 {
-    juce::String variableName;
+    VarRef variable;
     std::unique_ptr<Expr> expression;
     void execute (EvalContext&) const override;
 };
@@ -185,6 +208,8 @@ struct Program
 {
     std::vector<std::unique_ptr<Statement>> statements;
     FunctionRegistry functionRegistry;
+    int localSlotCount { 0 };
+    std::vector<juce::String> stateSlotNames;
 };
 
 struct ParseResult
@@ -227,7 +252,14 @@ private:
     Token consume();
     Token peek();
 
+    VarRef resolveVariableRef (const juce::String& name);
+    int getOrCreateLocalSlot (const juce::String& name);
+    int getOrCreateStateSlot (const juce::String& name);
+
     std::unique_ptr<ScriptTokenizer> tokenizer;
     juce::StringArray* errors { nullptr };
+    StringMap<int> localSlots;
+    StringMap<int> stateSlots;
+    std::vector<juce::String> stateSlotNames;
 };
 } // namespace scripting
