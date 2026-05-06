@@ -73,6 +73,10 @@ struct EvalContext
     std::vector<std::vector<float>> callArgFrames;
     int callArgDepth { 0 };
 
+    // Set by FunctionCallExpr::evaluate before calling a stateful builtin whose
+    // lane arg was a literal at parse time; -1 means "use persistentState map".
+    int builtinSlotBase { -1 };
+
     float getValue (const VarRef&) const;
     void setValue (const VarRef&, float);
 };
@@ -115,6 +119,9 @@ struct FunctionCallExpr : Expr
     juce::String functionName;
     juce::String functionNameLower;
     std::vector<std::unique_ptr<Expr>> arguments;
+    // >= 0 when the lane argument is a compile-time literal; index into
+    // EvalContext::stateSlots for this builtin's private state.
+    int preResolvedStateSlotBase { -1 };
 
     float evaluate (EvalContext&) const override;
 };
@@ -255,11 +262,14 @@ private:
     VarRef resolveVariableRef (const juce::String& name);
     int getOrCreateLocalSlot (const juce::String& name);
     int getOrCreateStateSlot (const juce::String& name);
+    int getOrCreateBuiltinStateSlotBase (const juce::String& key, int numSlots);
+    void tryResolveBuiltinStateSlots (FunctionCallExpr& call);
 
     std::unique_ptr<ScriptTokenizer> tokenizer;
     juce::StringArray* errors { nullptr };
     StringMap<int> localSlots;
     StringMap<int> stateSlots;
+    StringMap<int> builtinStateSlots;
     std::vector<juce::String> stateSlotNames;
 };
 } // namespace scripting

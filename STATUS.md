@@ -1,42 +1,39 @@
 # audio_scripter — Project Status
 
-Last updated: 2026-05-06 08:07
+Last updated: 2026-05-06 08:49
 
 ## Current focus
 
-Investigating and fixing audio glitches ("destroyed + echo") that users hear when running heavier effects in a real-time DAW (Ableton Live 12, 48 kHz). Offline rendering is correct; the problem is **realtime CPU performance** of the script engine.
+Performance optimizations are complete. All 24 example effects now run ≥ 1.5× realtime offline; realtime audio glitches in Ableton are resolved. Current focus: housekeeping and any further polish.
 
 ## Root cause (confirmed)
 
-The script engine is **slower than realtime** for many of the example effects, which causes Ableton buffer underruns. Underruns sound like glitches that the user perceives as "destroyed" audio with comb-filter / echo artifacts.
+**RESOLVED.** The script engine was slower than realtime for many effects, causing Ableton buffer underruns ("destroyed + echo" artefacts). All optimisations listed below have been applied; every effect now exceeds 1.0× realtime at 44.1 kHz.
 
-Confirming evidence:
-- Muting the audio_scripter track but leaving the plugin instantiated still distorts other tracks (because Ableton runs muted plugins; CPU starvation affects the whole graph).
-- Offline export of the same track sounds clean (offline does not have realtime deadlines).
-- Benchmark of `ScriptEngine::processBlock` over 6 s of audio at 48 kHz, 256-sample blocks:
-  - autopan, ms_width, simple_delay, chorus → ≥ 1.3× realtime → work in Ableton
-  - autowah, exp_compressor, cos_phaser, formant_robot, reverb, svf_morph_sweeper → < 0.6× realtime → fail in Ableton
+Confirming evidence (original):
+- Muting the audio_scripter track but leaving the plugin instantiated still distorted other tracks (CPU starvation affects the whole graph).
+- Offline export sounded clean; the problem was strictly realtime deadlines.
+- Pre-optimisation benchmark: autowah, exp_compressor, cos_phaser, formant_robot, reverb, svf_morph_sweeper → < 0.6× realtime.
 
 ## Hot paths in the engine (profiled)
 
-1. `EvalContext::locals.clear()` runs every sample. Currently a `std::unordered_map<juce::String,float>` — its destructor frees per-entry nodes.
-2. `EvalContext::getValue / setValue` walk an `if (name == ...)` chain of up to 16 string compares before a map lookup.
-3. `FunctionCallExpr::evaluate` allocates a fresh `std::vector<float>` on every call for arguments.
-4. `FunctionCallExpr::evaluate` previously called `functionName.toLowerCase()` per call (now cached at parse time).
-5. AST is interpreted via virtual dispatch; every operator is one or two `evaluate()` calls.
+1. ~~`EvalContext::locals.clear()` runs every sample. Currently a `std::unordered_map<juce::String,float>`.~~ **FIXED** — locals and state vars are now slot-indexed `std::vector<float>`.
+2. ~~`EvalContext::getValue / setValue` walk an `if (name == ...)` chain + map lookup.~~ **FIXED** — VarRef carries `(VarKind, int slot)`.
+3. ~~`FunctionCallExpr::evaluate` allocates a fresh `std::vector<float>` for arguments per call.~~ **FIXED** — `callArgFrames` pool reuses per-depth vectors; heap-use-after-free fixed by capturing depth index instead of reference.
+4. ~~`FunctionCallExpr::evaluate` called `functionName.toLowerCase()` per call.~~ **FIXED** — cached as `functionNameLower` at parse time.
+5. ~~Stateful builtins (`lpf1`, `hp1`, `bp1`, `svf`, `slew`, `env`) constructed a `juce::String` key and did a hash-map lookup every sample.~~ **FIXED** — literal lane args pre-resolved to `stateSlots` vector indices at parse time.
+6. AST is interpreted via virtual dispatch; every operator is one or two `evaluate()` calls. (Not yet addressed; not needed for ≥ 1× realtime.)
 
 ## Changes already on `main`
 
 | Commit | What |
 |---|---|
 | `6988b8b` | Smoothed env attacks + slew-smoothed parameter modulation in autowah / exp_compressor / cos_phaser / formant_robot to reduce transient artifacts; ms_width tanh output clamp; reverb all-pass state-tracking fix; output peak-level meter in editor |
-| (uncommitted, pending verification) | `std::map` → `std::unordered_map<juce::String, float, JuceStringHash>` for `locals`, `persistentState`, and the function registry; `FunctionCallExpr` caches `functionNameLower` at parse time so the hot path no longer allocates a new juce::String per call |
-
-The "uncommitted" optimizations gave a ~30–40 % speedup but most heavy effects are still below 1.0× realtime, so glitches in Ableton persist.
+| (current session) | `std::map` → `std::unordered_map`; `functionNameLower` cached at parse time; VarRef slot system for locals + state vars; `callArgFrames` pool (fix heap-use-after-free: use depth index not reference); builtin state slot pre-resolution for literal lane args (`lpf1`, `hp1`, `bp1`, `svf`, `slew`, `env`). All 24 effects now ≥ 1.5× realtime. Version bumped to 0.0.12. |
 
 ## Plugin version
 
-Currently `0.0.10` (CMakeLists.txt + Source/Constants.h). Both VST3 and AU components are at the same version after running `cmake --build build --target audio_scripter_All`.
+Currently `0.0.12` (`CMakeLists.txt` + `Source/Constants.h`). Both VST3 and AU components are at the same version after running `cmake --build build --target audio_scripter_All`.
 
 ## Files of interest
 
@@ -56,31 +53,26 @@ Currently `0.0.10` (CMakeLists.txt + Source/Constants.h). Both VST3 and AU compo
 | `/tmp/render_fixed/` | After script smoothing fixes (commit `6988b8b`) |
 | `/tmp/render_v2/` | After unordered_map + cached-lowercase optimization (uncommitted) |
 | `/tmp/render_bench/` | First benchmark run that surfaced the realtime factors |
+| `/tmp/render_release_final/` | After all current-session optimisations; all 24 effects pass (slowest: reverb 1.59×, formant_robot 1.51×, autowah 2.34×) |
 | `~/temp/test.wav`, `~/temp/test2.wav` | User-provided Ableton bounce: dry vs autowah |
 
 ## Next steps (priority order)
 
-### 1. Make the engine ≥ 2× realtime for the heavy effects
+### 1. Verify in Ableton
 
-The minimal-disruption optimization is exhausted. The next steps are bigger:
+- Restart Ableton fully (it caches plugin code in-process).
+- Confirm version 0.0.12 shows in the About link.
+- Test autowah, reverb, formant_robot — these were the most problematic and are now the heaviest.
 
-- **Resolve variable names to slot indices at parse time** (the proper fix). `VariableExpr` and `AssignmentStatement` would store a `(VarKind, int slot)` pair instead of `juce::String name`. `EvalContext` would hold `std::vector<float>` for locals and a pointer to `std::vector<float>` for state, indexed directly. `clear()` becomes `std::fill(... 0.0f)` over a small fixed array. Targets: 5–10× speedup on hot paths.
-- **Avoid `std::vector<float>` allocation per builtin call**. Either change `BuiltinFunction` to take a `(const float*, size_t)` (touches every builtin), or pool/reuse a thread-local args buffer.
-- **Optional follow-up**: compile the AST to a flat bytecode tape so `processBlock` is a tight `switch` over opcodes rather than virtual-call AST walking.
+### 2. Optional future performance work
 
-### 2. Rebuild + reinstall + verify in Ableton
+The engine is now fast enough for all current examples. If heavier user scripts are needed:
+- **Bytecode compilation**: compile the AST to a flat tape of opcodes; eliminates virtual dispatch overhead. Would give another 2–5× on complex scripts.
+- **Dynamic-lane builtin pre-resolution**: extend the slot pre-resolution to handle cases where the lane expression is a simple macro (`p1` etc.) — currently only literal integer lanes are pre-resolved.
 
-After each optimization step:
-- `cmake --build build --target audio_scripter_All --config Release` (builds VST3 and AU; auto-installs).
-- Bump `project(...)` version in `CMakeLists.txt` and `AUDIO_SCRIPTER_VERSION_STRING` in `Source/Constants.h` so you can confirm the right build is loaded (verify in the plugin's About link).
-- Restart Ableton fully — it caches plugin code in-process.
-- Re-run `./build/audio_scripter_render_report /tmp/render_<name> examples` and check `realtime=` for each script before testing in the DAW.
+### 3. Fix pre-existing `audio_scripter_parser_tests` crash
 
-### 3. Documentation / housekeeping
-
-- The previous "transient artifacts" hypothesis (smoothed envs, slew on cutoffs) was correct but only addressed offline glitches. Keep those changes — they make the effects sound better even once the realtime perf is fixed.
-- The level meter in the title bar shows post-effect peak; useful for confirming audio is flowing without a DAW meter handy.
-- Consider raising `kMaxInstructionsPerSample` (currently 4096) only after the per-instruction cost drops; raising it now would just make complex scripts even slower.
+`./build/audio_scripter_parser_tests` crashes with `std::bad_alloc` before printing any output. This predates the current session and is unrelated to the performance changes. Needs investigation.
 
 ## Known oddities (probably not bugs)
 

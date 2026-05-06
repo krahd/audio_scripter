@@ -179,6 +179,24 @@ int laneFromArgs (const std::vector<float>& args, size_t index)
     return (int) std::lrint (getArg (args, index, 0.0f));
 }
 
+// Fast slot-based state access used when builtinSlotBase >= 0.
+float readBuiltinState (EvalContext& ctx, int offset)
+{
+    if (ctx.stateSlots == nullptr)
+        return 0.0f;
+    const auto idx = (size_t) (ctx.builtinSlotBase + offset);
+    return idx < ctx.stateSlots->size() ? (*ctx.stateSlots)[idx] : 0.0f;
+}
+
+void writeBuiltinState (EvalContext& ctx, int offset, float value)
+{
+    if (ctx.stateSlots == nullptr)
+        return;
+    const auto idx = (size_t) (ctx.builtinSlotBase + offset);
+    if (idx < ctx.stateSlots->size())
+        (*ctx.stateSlots)[idx] = finiteOrZero (value);
+}
+
 void registerBuiltins (FunctionRegistry& registry)
 {
     registry.builtins.clear();
@@ -234,61 +252,108 @@ void registerBuiltins (FunctionRegistry& registry)
 
     registry.builtins["lpf1"] = [] (EvalContext& ctx, const std::vector<float>& a)
     {
-        const auto x = getArg (a, 0);
+        const auto x     = getArg (a, 0);
         const auto coeff = clampf (getArg (a, 1), 0.0f, 1.0f);
-        const auto lane = laneFromArgs (a, 2);
 
-        auto y = readLaneState (ctx, "lpf1", lane);
-        y += coeff * (x - y);
-        writeLaneState (ctx, "lpf1", lane, y);
+        float y;
+        if (ctx.builtinSlotBase >= 0)
+        {
+            y = readBuiltinState (ctx, 0);
+            y += coeff * (x - y);
+            writeBuiltinState (ctx, 0, y);
+        }
+        else
+        {
+            const auto lane = laneFromArgs (a, 2);
+            y = readLaneState (ctx, "lpf1", lane);
+            y += coeff * (x - y);
+            writeLaneState (ctx, "lpf1", lane, y);
+        }
         return y;
     };
 
     registry.builtins["hp1"] = [] (EvalContext& ctx, const std::vector<float>& a)
     {
-        const auto x = getArg (a, 0);
+        const auto x     = getArg (a, 0);
         const auto coeff = clampf (getArg (a, 1), 0.0f, 1.0f);
-        const auto lane = laneFromArgs (a, 2);
 
-        auto y = readLaneState (ctx, "hp1_lpf", lane);
-        y += coeff * (x - y);
-        writeLaneState (ctx, "hp1_lpf", lane, y);
-        return x - y;
+        float lpState;
+        if (ctx.builtinSlotBase >= 0)
+        {
+            lpState = readBuiltinState (ctx, 0);
+            lpState += coeff * (x - lpState);
+            writeBuiltinState (ctx, 0, lpState);
+        }
+        else
+        {
+            const auto lane = laneFromArgs (a, 2);
+            lpState = readLaneState (ctx, "hp1_lpf", lane);
+            lpState += coeff * (x - lpState);
+            writeLaneState (ctx, "hp1_lpf", lane, lpState);
+        }
+        return x - lpState;
     };
 
     registry.builtins["bp1"] = [] (EvalContext& ctx, const std::vector<float>& a)
     {
-        const auto x = getArg (a, 0);
+        const auto x      = getArg (a, 0);
         const auto hpCoeff = clampf (getArg (a, 1), 0.0f, 1.0f);
         const auto lpCoeff = clampf (getArg (a, 2), 0.0f, 1.0f);
-        const auto lane = laneFromArgs (a, 3);
 
-        auto hpLp = readLaneState (ctx, "bp1_hplp", lane);
-        hpLp += hpCoeff * (x - hpLp);
-        writeLaneState (ctx, "bp1_hplp", lane, hpLp);
-        const auto hp = x - hpLp;
-
-        auto bp = readLaneState (ctx, "bp1_bp", lane);
-        bp += lpCoeff * (hp - bp);
-        writeLaneState (ctx, "bp1_bp", lane, bp);
+        float hpLp, bp;
+        if (ctx.builtinSlotBase >= 0)
+        {
+            hpLp  = readBuiltinState (ctx, 0);
+            hpLp += hpCoeff * (x - hpLp);
+            writeBuiltinState (ctx, 0, hpLp);
+            const auto hp = x - hpLp;
+            bp  = readBuiltinState (ctx, 1);
+            bp += lpCoeff * (hp - bp);
+            writeBuiltinState (ctx, 1, bp);
+        }
+        else
+        {
+            const auto lane = laneFromArgs (a, 3);
+            hpLp  = readLaneState (ctx, "bp1_hplp", lane);
+            hpLp += hpCoeff * (x - hpLp);
+            writeLaneState (ctx, "bp1_hplp", lane, hpLp);
+            const auto hp = x - hpLp;
+            bp  = readLaneState (ctx, "bp1_bp", lane);
+            bp += lpCoeff * (hp - bp);
+            writeLaneState (ctx, "bp1_bp", lane, bp);
+        }
         return bp;
     };
 
     registry.builtins["svf"] = [] (EvalContext& ctx, const std::vector<float>& a)
     {
-        const auto x = getArg (a, 0);
+        const auto x      = getArg (a, 0);
         const auto cutoff = clampf (getArg (a, 1), 0.001f, 0.99f);
-        const auto q = std::max (0.05f, getArg (a, 2, 0.7f));
-        const auto mode = (int) std::lrint (getArg (a, 3, 0.0f));
-        const auto lane = laneFromArgs (a, 4);
+        const auto q      = std::max (0.05f, getArg (a, 2, 0.7f));
+        const auto mode   = (int) std::lrint (getArg (a, 3, 0.0f));
 
-        auto low = readLaneStateSuffix (ctx, "svf", lane, "low");
-        auto band = readLaneStateSuffix (ctx, "svf", lane, "band");
-        const auto high = x - low - q * band;
-        band += cutoff * high;
-        low += cutoff * band;
-        writeLaneStateSuffix (ctx, "svf", lane, "low", low);
-        writeLaneStateSuffix (ctx, "svf", lane, "band", band);
+        float low, band, high;
+        if (ctx.builtinSlotBase >= 0)
+        {
+            low  = readBuiltinState (ctx, 0);
+            band = readBuiltinState (ctx, 1);
+            high = x - low - q * band;
+            band += cutoff * high;
+            low  += cutoff * band;
+            writeBuiltinState (ctx, 0, low);
+            writeBuiltinState (ctx, 1, band);
+        }
+        else
+        {
+            const auto lane = laneFromArgs (a, 4);
+            low  = readLaneStateSuffix (ctx, "svf", lane, "low");
+            band = readLaneStateSuffix (ctx, "svf", lane, "band");
+            high = x - low - q * band;
+            band += cutoff * high;
+            low  += cutoff * band;
+            writeLaneStateSuffix (ctx, "svf", lane, "low",  low);
+            writeLaneStateSuffix (ctx, "svf", lane, "band", band);
+        }
 
         switch (mode)
         {
@@ -301,27 +366,45 @@ void registerBuiltins (FunctionRegistry& registry)
     registry.builtins["slew"] = [] (EvalContext& ctx, const std::vector<float>& a)
     {
         const auto target = getArg (a, 0);
-        const auto speed = std::max (0.0f, getArg (a, 1));
-        const auto lane = laneFromArgs (a, 2);
+        const auto speed  = std::max (0.0f, getArg (a, 1));
 
-        auto current = readLaneState (ctx, "slew", lane);
-        const auto delta = clampf (target - current, -speed, speed);
-        current += delta;
-        writeLaneState (ctx, "slew", lane, current);
+        float current;
+        if (ctx.builtinSlotBase >= 0)
+        {
+            current  = readBuiltinState (ctx, 0);
+            current += clampf (target - current, -speed, speed);
+            writeBuiltinState (ctx, 0, current);
+        }
+        else
+        {
+            const auto lane = laneFromArgs (a, 2);
+            current  = readLaneState (ctx, "slew", lane);
+            current += clampf (target - current, -speed, speed);
+            writeLaneState (ctx, "slew", lane, current);
+        }
         return current;
     };
 
     registry.builtins["env"] = [] (EvalContext& ctx, const std::vector<float>& a)
     {
-        const auto x = std::abs (getArg (a, 0));
-        const auto attack = clampf (getArg (a, 1), 0.0f, 1.0f);
+        const auto x       = std::abs (getArg (a, 0));
+        const auto attack  = clampf (getArg (a, 1), 0.0f, 1.0f);
         const auto release = clampf (getArg (a, 2), 0.0f, 1.0f);
-        const auto lane = laneFromArgs (a, 3);
 
-        auto y = readLaneState (ctx, "env", lane);
-        const auto coeff = x > y ? attack : release;
-        y += coeff * (x - y);
-        writeLaneState (ctx, "env", lane, y);
+        float y;
+        if (ctx.builtinSlotBase >= 0)
+        {
+            y = readBuiltinState (ctx, 0);
+            y += (x > y ? attack : release) * (x - y);
+            writeBuiltinState (ctx, 0, y);
+        }
+        else
+        {
+            const auto lane = laneFromArgs (a, 3);
+            y = readLaneState (ctx, "env", lane);
+            y += (x > y ? attack : release) * (x - y);
+            writeLaneState (ctx, "env", lane, y);
+        }
         return y;
     };
 

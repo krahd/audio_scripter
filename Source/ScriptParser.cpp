@@ -273,11 +273,21 @@ float FunctionCallExpr::evaluate (EvalContext& ctx) const
     if ((int) ctx.callArgFrames.size() <= ctx.callArgDepth)
         ctx.callArgFrames.emplace_back();
 
-    auto& values = ctx.callArgFrames[(size_t) ctx.callArgDepth++];
-    values.clear();
-    values.reserve (arguments.size());
+    // Capture the index rather than a reference: evaluating arguments can trigger nested
+    // FunctionCallExpr::evaluate calls which call emplace_back(), reallocating callArgFrames
+    // and invalidating any reference taken before argument evaluation completes.
+    const auto depthIdx = (size_t) ctx.callArgDepth++;
+    ctx.callArgFrames[depthIdx].clear();
+    ctx.callArgFrames[depthIdx].reserve (arguments.size());
     for (const auto& arg : arguments)
-        values.push_back (arg != nullptr ? arg->evaluate (ctx) : 0.0f);
+    {
+        // Evaluate first, then re-index: avoids dangling ref if callArgFrames grew during eval.
+        const float v = arg != nullptr ? arg->evaluate (ctx) : 0.0f;
+        ctx.callArgFrames[depthIdx].push_back (v);
+    }
+
+    // All args evaluated — callArgFrames won't grow further, so a reference is stable here.
+    const auto& values = ctx.callArgFrames[depthIdx];
 
     if (ctx.functionRegistry == nullptr)
     {
@@ -287,8 +297,12 @@ float FunctionCallExpr::evaluate (EvalContext& ctx) const
 
     if (const auto it = ctx.functionRegistry->builtins.find (functionNameLower); it != ctx.functionRegistry->builtins.end())
     {
+        const auto savedSlotBase = ctx.builtinSlotBase;
+        ctx.builtinSlotBase = preResolvedStateSlotBase;
         --ctx.callArgDepth;
-        return it->second (ctx, values);
+        const auto result = it->second (ctx, values);
+        ctx.builtinSlotBase = savedSlotBase;
+        return result;
     }
 
     if (const auto uit = ctx.functionRegistry->user.find (functionName); uit != ctx.functionRegistry->user.end() && uit->second != nullptr)
@@ -318,7 +332,7 @@ float FunctionCallExpr::evaluate (EvalContext& ctx) const
         const auto previousBreakTriggered = ctx.breakTriggered;
         const auto previousContinueTriggered = ctx.continueTriggered;
 
-    std::fill (ctx.locals.begin(), ctx.locals.end(), 0.0f);
+        std::fill (ctx.locals.begin(), ctx.locals.end(), 0.0f);
         ctx.returnTriggered = false;
         ctx.breakTriggered = false;
         ctx.continueTriggered = false;
@@ -436,6 +450,7 @@ ParseResult ScriptParser::parse (const juce::String& source)
     errors = &result.errors;
     localSlots.clear();
     stateSlots.clear();
+    builtinStateSlots.clear();
     stateSlotNames.clear();
 
     while (peek().type != TokenType::end)
@@ -1059,6 +1074,7 @@ std::unique_ptr<Expr> ScriptParser::parsePrimary()
         call->functionName = token.text;
         call->functionNameLower = token.text.toLowerCase();
         call->arguments = std::move (args);
+        tryResolveBuiltinStateSlots (*call);
         return call;
     }
 
@@ -1135,9 +1151,59 @@ int ScriptParser::getOrCreateStateSlot (const juce::String& name)
     if (const auto it = stateSlots.find (name); it != stateSlots.end())
         return it->second;
 
-    const auto slot = (int) stateSlots.size();
+    // Use stateSlotNames.size() (not stateSlots.size()) so that user state slots
+    // and pre-resolved builtin state slots share the same contiguous index space.
+    const auto slot = (int) stateSlotNames.size();
     stateSlots[name] = slot;
     stateSlotNames.push_back (name);
     return slot;
+}
+
+int ScriptParser::getOrCreateBuiltinStateSlotBase (const juce::String& key, int numSlots)
+{
+    if (const auto it = builtinStateSlots.find (key); it != builtinStateSlots.end())
+        return it->second;
+
+    const auto base = (int) stateSlotNames.size();
+    builtinStateSlots[key] = base;
+    for (int i = 0; i < numSlots; ++i)
+        stateSlotNames.push_back (key + "_" + juce::String (i));
+    return base;
+}
+
+void ScriptParser::tryResolveBuiltinStateSlots (FunctionCallExpr& call)
+{
+    struct BuiltinInfo { int laneArgIndex; int numSlots; };
+    static const std::pair<const char*, BuiltinInfo> table[] = {
+        { "lpf1", { 2, 1 } },
+        { "hp1",  { 2, 1 } },
+        { "bp1",  { 3, 2 } },
+        { "svf",  { 4, 2 } },
+        { "slew", { 2, 1 } },
+        { "env",  { 3, 1 } },
+    };
+
+    for (const auto& entry : table)
+    {
+        if (call.functionNameLower != entry.first)
+            continue;
+
+        const auto laneArgIdx = entry.second.laneArgIndex;
+        const auto numSlots   = entry.second.numSlots;
+        const auto& args      = call.arguments;
+
+        int lane = 0;
+        if (laneArgIdx < (int) args.size())
+        {
+            const auto* lit = dynamic_cast<const TypedLiteralExpr*> (args[(size_t) laneArgIdx].get());
+            if (lit == nullptr)
+                return;  // dynamic lane expression — cannot pre-resolve
+            lane = (int) std::lrint (lit->value);
+        }
+
+        const auto key = juce::String (entry.first) + "_" + juce::String (lane);
+        call.preResolvedStateSlotBase = getOrCreateBuiltinStateSlotBase (key, numSlots);
+        return;
+    }
 }
 } // namespace scripting
