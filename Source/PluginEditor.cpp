@@ -297,7 +297,14 @@ AudioScripterAudioProcessorEditor::AudioScripterAudioProcessorEditor (AudioScrip
     helpDocument.replaceAllContent (fixCp1252Mojibake (scripting::helpText()));
     addAndMakeVisible (*helpPanel);
 
+    levelLabel.setFont (juce::FontOptions (12.0f));
+    levelLabel.setJustificationType (juce::Justification::centred);
+    levelLabel.setColour (juce::Label::backgroundColourId, juce::Colour (0xff1a2028));
+    levelLabel.setColour (juce::Label::textColourId, juce::Colour (0xff4ec9b0));
+    addAndMakeVisible (levelLabel);
+
     applyScriptMetadata();
+    startTimerHz (15);
 
     // setSize must come after all child components are created so that the
     // first resized() call can lay them out correctly.
@@ -306,12 +313,22 @@ AudioScripterAudioProcessorEditor::AudioScripterAudioProcessorEditor (AudioScrip
 
 AudioScripterAudioProcessorEditor::~AudioScripterAudioProcessorEditor()
 {
+    stopTimer();
     applyButton.removeListener (this);
     saveButton.removeListener (this);
     loadButton.removeListener (this);
     aboutButton.removeListener (this);
     defaultsButton.removeListener (this);
     examplesBox.removeListener (this);
+}
+
+void AudioScripterAudioProcessorEditor::timerCallback()
+{
+    const float peak = audioProcessor.outputPeakLevel.exchange (0.0f);
+    const bool active = peak > 0.001f;
+    levelLabel.setText (active ? juce::String (peak, 3) : "---", juce::dontSendNotification);
+    levelLabel.setColour (juce::Label::textColourId,
+                          active ? juce::Colour (0xff4ec9b0) : juce::Colour (0xff3a4858));
 }
 
 void AudioScripterAudioProcessorEditor::paint (juce::Graphics& g)
@@ -331,6 +348,7 @@ void AudioScripterAudioProcessorEditor::resized()
     auto titleRow = area.removeFromTop (30);
     websiteButton.setBounds (titleRow.removeFromRight (240));
     aboutButton.setBounds (titleRow.removeFromRight (46));
+    levelLabel.setBounds (titleRow.removeFromRight (54));
     titleLabel.setBounds (titleRow);
 
     auto controls = area.removeFromTop (30);

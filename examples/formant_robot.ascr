@@ -10,23 +10,23 @@
 # No delay feedback, so the effect stays articulate instead of echo-like.
 vowel = 0.5 + 0.5 * sin(6.2831853 * (0.05 + p1 * 0.55) * t);
 robotHz = 38.0 + p2 * 190.0;
-carrier = mix(1.0, 0.55 + 0.45 * sin(6.2831853 * robotHz * t), p2);
-drive = 1.0 + p3 * 4.5;
+carrier = mix(1.0, 0.7 + 0.3 * sin(6.2831853 * robotHz * t), p2 * 0.7);
+drive = 1.0 + p3 * 3.0;
 
 srcL = tanh(inL * drive) * carrier;
-srcR = tanh(inR * drive) * (0.55 + 0.45 * sin(6.2831853 * robotHz * t + 0.72));
+srcR = tanh(inR * drive) * mix(1.0, 0.7 + 0.3 * sin(6.2831853 * robotHz * t + 0.72), p2 * 0.7);
 
 f1 = 0.018 + vowel * 0.075 + p1 * 0.02;
 f2 = 0.085 + (1.0 - vowel) * 0.18 + p2 * 0.03;
 f3 = 0.22 + vowel * 0.24 + p3 * 0.08;
-q = 0.75 + p2 * 1.45;
+q = 0.55 + p2 * 0.8;
 
-bankL = svf(srcL, f1, q, 1.0, 0) * 1.35 + svf(srcL, f2, q * 0.82, 1.0, 2) * 0.92 + svf(srcL, f3, 0.55 + p3 * 0.9, 1.0, 4) * 0.42;
-bankR = svf(srcR, f1 * 1.06, q, 1.0, 1) * 1.35 + svf(srcR, f2 * 0.94, q * 0.82, 1.0, 3) * 0.92 + svf(srcR, f3 * 1.03, 0.55 + p3 * 0.9, 1.0, 5) * 0.42;
+bankL = svf(srcL, f1, q, 1.0, 0) * 1.0 + svf(srcL, f2, q * 0.82, 1.0, 2) * 0.7 + svf(srcL, f3, 0.45 + p3 * 0.55, 1.0, 4) * 0.32;
+bankR = svf(srcR, f1 * 1.06, q, 1.0, 1) * 1.0 + svf(srcR, f2 * 0.94, q * 0.82, 1.0, 3) * 0.7 + svf(srcR, f3 * 1.03, 0.45 + p3 * 0.55, 1.0, 5) * 0.32;
 
 bodyL = lpf1(srcL, 0.025 + p1 * 0.06, 6);
 bodyR = lpf1(srcR, 0.025 + p1 * 0.06, 7);
-wetL = tanh(bankL * (1.1 + p3 * 0.7) + bodyL * 0.22);
-wetR = tanh(bankR * (1.1 + p3 * 0.7) + bodyR * 0.22);
+wetL = tanh(bankL * (0.9 + p3 * 0.5) + bodyL * 0.22);
+wetR = tanh(bankR * (0.9 + p3 * 0.5) + bodyR * 0.22);
 outL = mix(inL, wetL, p4);
 outR = mix(inR, wetR, p4);

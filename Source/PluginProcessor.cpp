@@ -68,6 +68,12 @@ void AudioScripterAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer
     auto macroValues = getMacroValues();
     engine.processBlock (buffer, macroValues);
     queueScriptMacroUpdate (macroValues);
+
+    float blockPeak = 0.0f;
+    for (int ch = 0; ch < buffer.getNumChannels(); ++ch)
+        for (int s = 0; s < buffer.getNumSamples(); ++s)
+            blockPeak = std::max (blockPeak, std::abs (buffer.getSample (ch, s)));
+    outputPeakLevel.store (std::max (blockPeak, outputPeakLevel.load() * 0.997f));
 }
 
 void AudioScripterAudioProcessor::queueScriptMacroUpdate (const std::array<float, 8>& values)

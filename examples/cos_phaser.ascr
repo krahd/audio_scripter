@@ -13,7 +13,7 @@ sweepL = 0.5 + 0.5 * cos(6.2831853 * rate * t);
 sweepR = 0.5 + 0.5 * cos(6.2831853 * rate * t + 1.5708);
 aL = 0.12 + sweepL * (0.18 + p2 * 0.62);
 aR = 0.12 + sweepR * (0.18 + p2 * 0.62);
-fb = p3 * 0.36;
+fb = p3 * 0.18;
 
 xL = inL + state_phaseFbL * fb;
 xR = inR + state_phaseFbR * fb;

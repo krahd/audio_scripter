@@ -9,5 +9,5 @@ side = (inL - inR) * 0.5;
 width = p1 * 2.0;
 satSide = tanh(side * (1.0 + p2 * 5.0));
 wSide = satSide * width;
-outL = mid + wSide;
-outR = mid - wSide;
+outL = tanh(mid + wSide);
+outR = tanh(mid - wSide);

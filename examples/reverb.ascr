@@ -35,8 +35,8 @@ ap1DelayL = delay(ap1InL, 337.0 * scale, 10);
 ap1DelayR = delay(ap1InR, 421.0 * scale, 11);
 ap1L = ap1DelayL - combL * 0.52;
 ap1R = ap1DelayR - combR * 0.52;
-state_ap1L = ap1L;
-state_ap1R = ap1R;
+state_ap1L = ap1DelayL;
+state_ap1R = ap1DelayR;
 
 ap2InL = ap1L + state_ap2L * 0.38;
 ap2InR = ap1R + state_ap2R * 0.38;
@@ -44,8 +44,8 @@ ap2DelayL = delay(ap2InL, 113.0 * scale, 12);
 ap2DelayR = delay(ap2InR, 149.0 * scale, 13);
 verbL = tanh(ap2DelayL - ap1L * 0.38);
 verbR = tanh(ap2DelayR - ap1R * 0.38);
-state_ap2L = verbL;
-state_ap2R = verbR;
+state_ap2L = ap2DelayL;
+state_ap2R = ap2DelayR;
 
 outL = mix(inL, verbL, p3);
 outR = mix(inR, verbR, p3);

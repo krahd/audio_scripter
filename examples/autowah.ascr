@@ -9,11 +9,13 @@
 # Autowah: envelope follower sweeps a band-pass window, without feedback echo.
 # p1 = sensitivity, p2 = base cutoff, p3 = peak color, p4 = wet
 drive = 1.0 + p1 * 4.0;
-ampL = env(inL * drive, 0.018, 0.0012, 0);
-ampR = env(inR * drive, 0.018, 0.0012, 1);
+ampL = env(inL * drive, 0.005, 0.0008, 0);
+ampR = env(inR * drive, 0.005, 0.0008, 1);
 
-sweepL = clamp(p2 * 0.18 + ampL * (0.16 + p1 * 0.42), 0.012, 0.62);
-sweepR = clamp(p2 * 0.18 + ampR * (0.16 + p1 * 0.42), 0.012, 0.62);
+rawSweepL = clamp(p2 * 0.18 + ampL * (0.16 + p1 * 0.42), 0.012, 0.62);
+rawSweepR = clamp(p2 * 0.18 + ampR * (0.16 + p1 * 0.42), 0.012, 0.62);
+sweepL = slew(rawSweepL, 0.0008, 4);
+sweepR = slew(rawSweepR, 0.0008, 5);
 lowCutL = clamp(sweepL * (0.18 + p3 * 0.42), 0.004, 0.34);
 lowCutR = clamp(sweepR * (0.18 + p3 * 0.42), 0.004, 0.34);
 highCutL = clamp(sweepL + 0.055 + p3 * 0.16, 0.03, 0.78);
@@ -23,7 +25,7 @@ wahL = bp1(inL, lowCutL, highCutL, 0);
 wahR = bp1(inR, lowCutR, highCutR, 1);
 bodyL = lpf1(inL, 0.03 + p2 * 0.08, 2);
 bodyR = lpf1(inR, 0.03 + p2 * 0.08, 3);
-wetL = tanh((wahL * (1.8 + p3 * 2.2) + bodyL * 0.25) * 1.4);
-wetR = tanh((wahR * (1.8 + p3 * 2.2) + bodyR * 0.25) * 1.4);
+wetL = tanh((wahL * (1.4 + p3 * 1.6) + bodyL * 0.25) * 1.1);
+wetR = tanh((wahR * (1.4 + p3 * 1.6) + bodyR * 0.25) * 1.1);
 outL = mix(inL, wetL, p4);
 outR = mix(inR, wetR, p4);
