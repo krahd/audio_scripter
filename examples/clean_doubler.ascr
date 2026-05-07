@@ -1,0 +1,21 @@
+#@p1: Delay
+#@p2: Detune
+#@p3: Width
+#@p4: Wet
+# p1 = 0.35
+# p2 = 0.45
+# p3 = 0.7
+# p4 = 0.65
+# Clean stereo doubler: two short modulated copies without feedback
+# p1 = base delay, p2 = pitch motion, p3 = stereo width, p4 = dry/wet
+base = 360.0 + p1 * 980.0;
+rate = 0.18 + p2 * 1.2;
+modL = sin(6.2831853 * rate * t) * (18.0 + p2 * 60.0);
+modR = sin(6.2831853 * rate * t + 2.094) * (18.0 + p2 * 60.0);
+dL = delay(inL, base + modL, 0);
+dR = delay(inR, base + modR, 1);
+cross = p3 * 0.32;
+wetL = dL * (1.0 - cross) + dR * cross;
+wetR = dR * (1.0 - cross) + dL * cross;
+outL = mix(inL, wetL, p4);
+outR = mix(inR, wetR, p4);

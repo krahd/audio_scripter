@@ -1,4 +1,4 @@
-# audio_scripter 0.0.8
+# audio_scripter 0.0.9
 
 audio_scripter is a JUCE-based, real-time scriptable audio effect plugin (VST3, AU, Standalone).
 
@@ -19,8 +19,8 @@ Write DSP scripts that run **once per audio sample**, manipulate `inL`/`inR`, an
 | Document | Contents |
 | --- | --- |
 | [Language manual](docs/LANGUAGE_SPEC.md) | Full script language tutorial, reference, and examples |
+| [Developer guide](docs/DEVELOPER_GUIDE.md) | Runtime architecture, DSP primitive notes, and build/release details |
 | [Changelog](docs/CHANGELOG.md) | Release history |
-| [Plugin audit](docs/PLUGIN_AUDIT_AND_NEXT_STEPS.md) | Internal release-engineering checklist |
 
 ## Build requirements
 
@@ -76,19 +76,24 @@ A CI workflow (`.github/workflows/ci.yml`) runs the script validator and parser 
 A release workflow (`.github/workflows/release.yml`) builds macOS and Windows artifacts and publishes a GitHub Release when you push a `v*` tag:
 
 ```bash
-git tag v0.0.8
-git push origin v0.0.8
+git tag v0.0.9
+git push origin v0.0.9
 ```
 
 ## Examples
 
 Scripts live in `examples/`. Load any `.ascr` file from the plugin's **Load** button or pick one from the examples dropdown.
 
+The curated library is split between practical studio effects and stranger scripting-first patches:
+
+- Standard palette: delay, ping-pong delay, diffused reverb, chorus, stereo doubler, tremolo, autopan, phaser, autowah, compressor, transient shaper, soft clip, EQ, filters, stereo width.
+- Creative palette: formant robot, ring modulator, rhythmic pulse gate, sample-and-hold, sample-rate reducer, wavefold shimmer, harmonic exciter, SVF morph sweeper.
+
 Authoring tips:
 
 - Smooth discontinuities with `slew` or `lpf1` to avoid clicks.
-- Prefer event-triggered noise bursts over always-on `noise(t * sr)`.
-- Stage wet/dry with `mix(dry, wet, p1)` so the effect is always controllable.
+- Use fractional `delay()` times for modulated chorus/flange/doubler motion; the engine interpolates between samples.
+- Stage wet/dry with `mix(dry, wet, pN)` so the effect is always controllable.
 
 ## License
 

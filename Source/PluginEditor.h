@@ -6,7 +6,8 @@
 
 class AudioScripterAudioProcessorEditor final : public juce::AudioProcessorEditor,
                                                 private juce::Button::Listener,
-                                                private juce::ComboBox::Listener
+                                                private juce::ComboBox::Listener,
+                                                private juce::Timer
 {
 public:
     explicit AudioScripterAudioProcessorEditor (AudioScripterAudioProcessor&);
@@ -18,6 +19,7 @@ public:
 private:
     void buttonClicked (juce::Button*) override;
     void comboBoxChanged (juce::ComboBox*) override;
+    void timerCallback() override;
 
     void applyScript();
     void applyScriptMetadata();
@@ -25,8 +27,9 @@ private:
     void saveScriptToFile();
     void loadScriptFromFile();
     void showAboutBox();
+    void appendToLog (const juce::String& message, juce::Colour colour = juce::Colours::lightgreen);
 
-    AudioScripterAudioProcessor& processor;
+    AudioScripterAudioProcessor& audioProcessor;
 
     juce::Label titleLabel;
     juce::HyperlinkButton websiteButton {
@@ -43,7 +46,6 @@ private:
     juce::HyperlinkButton aboutButton { "About", juce::URL() };
     juce::TextButton defaultsButton { "Defaults" };
     juce::ComboBox examplesBox;
-    std::vector<juce::File> exampleFiles;
     juce::CodeDocument helpDocument;
     std::unique_ptr<juce::CodeEditorComponent> helpPanel;
 
@@ -52,4 +54,5 @@ private:
     std::vector<std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment>> macroAttachments;
 
     juce::File lastScriptDirectory;
+    juce::Label levelLabel;
 };

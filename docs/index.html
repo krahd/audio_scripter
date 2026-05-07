@@ -214,6 +214,8 @@
     <div class="links">
       <a href="#examples">Examples</a>
       <a href="#reference">Reference</a>
+      <a href="language_spec.html">Language Manual</a>
+      <a href="developer_guide.html">Dev Guide</a>
       <a href="https://github.com/krahd/audio_scripter">GitHub</a>
       <a href="https://github.com/krahd/audio_scripter/releases">Releases</a>
     </div>
@@ -224,12 +226,12 @@
 <div class="hero">
   <div class="container">
     <h1>audio_scripter</h1>
-    <div class="version">v1.1.0</div>
+    <div class="version">v0.0.9</div>
     <p>A real-time scriptable audio effects plugin. Write per-sample DSP scripts, press Apply, hear the result — no compilation step, no DAW restart.</p>
     <div class="cta">
       <a class="btn btn-primary" href="https://github.com/krahd/audio_scripter/releases">Download</a>
       <a class="btn btn-secondary" href="https://github.com/krahd/audio_scripter">View on GitHub</a>
-      <a class="btn btn-secondary" href="LANGUAGE_SPEC.md">Language manual</a>
+      <a class="btn btn-secondary" href="language_spec.html">Language manual</a>
     </div>
   </div>
 </div>
@@ -283,7 +285,8 @@
     </p>
 
     <h3>Minimal pass-through</h3>
-    <pre><span class="comment"># empty script — outL/outR default to inL/inR</span></pre>
+    <pre>outL = inL;
+outR = inR;</pre>
 
     <br>
     <h3>Macro-driven soft saturation</h3>
@@ -334,50 +337,48 @@ outR = <span class="fn">mix</span>(inR, procR, p4);</pre>
       </div>
 
       <div class="example-card">
-        <h3>Micro-delay widener</h3>
-        <pre><span class="comment"># @p1: Time  @p2: Feedback  @p3: Width  @p4: Wet</span>
-base = <span class="num">12.0</span> + p1 * <span class="num">520.0</span>;
-fb   = p2 * <span class="num">0.55</span>;
-spread = <span class="num">1.0</span> + p3 * <span class="num">0.8</span>;
-
-delInL = inL + state_fbL * fb;
-delInR = inR + state_fbR * fb;
-dL = <span class="fn">delay</span>(delInL, base, <span class="num">0</span>);
-dR = <span class="fn">delay</span>(delInR, base * spread, <span class="num">1</span>);
-state_fbL = <span class="fn">sat</span>(dL, <span class="num">0.6</span> + p2 * <span class="num">0.9</span>, <span class="num">0</span>);
-state_fbR = <span class="fn">sat</span>(dR, <span class="num">0.6</span> + p2 * <span class="num">0.9</span>, <span class="num">0</span>);
-outL = <span class="fn">mix</span>(inL, dL, p4);
-outR = <span class="fn">mix</span>(inR, dR, p4);</pre>
+        <h3>Formant robot</h3>
+        <pre><span class="comment"># @p1: Vowel  @p2: Robot  @p3: Grit  @p4: Wet</span>
+vowel = <span class="num">0.5</span> + <span class="num">0.5</span> * <span class="fn">sin</span>(<span class="num">6.2831853</span> * (<span class="num">0.05</span> + p1 * <span class="num">0.55</span>) * t);
+carrier = <span class="fn">mix</span>(<span class="num">1.0</span>, <span class="num">0.55</span> + <span class="num">0.45</span> * <span class="fn">sin</span>(<span class="num">6.2831853</span> * (<span class="num">38.0</span> + p2 * <span class="num">190.0</span>) * t), p2);
+srcL = <span class="fn">tanh</span>(inL * (<span class="num">1.0</span> + p3 * <span class="num">4.5</span>)) * carrier;
+srcR = <span class="fn">tanh</span>(inR * (<span class="num">1.0</span> + p3 * <span class="num">4.5</span>)) * carrier;
+f1 = <span class="num">0.018</span> + vowel * <span class="num">0.075</span> + p1 * <span class="num">0.02</span>;
+f2 = <span class="num">0.085</span> + (<span class="num">1.0</span> - vowel) * <span class="num">0.18</span> + p2 * <span class="num">0.03</span>;
+bankL = <span class="fn">svf</span>(srcL, f1, <span class="num">0.75</span> + p2 * <span class="num">1.45</span>, <span class="num">1.0</span>, <span class="num">0</span>)
+      + <span class="fn">svf</span>(srcL, f2, <span class="num">0.65</span> + p2, <span class="num">1.0</span>, <span class="num">2</span>);
+bankR = <span class="fn">svf</span>(srcR, f1 * <span class="num">1.06</span>, <span class="num">0.75</span> + p2 * <span class="num">1.45</span>, <span class="num">1.0</span>, <span class="num">1</span>)
+      + <span class="fn">svf</span>(srcR, f2 * <span class="num">0.94</span>, <span class="num">0.65</span> + p2, <span class="num">1.0</span>, <span class="num">3</span>);
+outL = <span class="fn">mix</span>(inL, <span class="fn">tanh</span>(bankL * (<span class="num">1.2</span> + p3)), p4);
+outR = <span class="fn">mix</span>(inR, <span class="fn">tanh</span>(bankR * (<span class="num">1.2</span> + p3)), p4);</pre>
       </div>
 
       <div class="example-card">
-        <h3>Iterative wavefold</h3>
-        <pre><span class="comment"># @p1: Drive  @p2: Iterations  @p3: Wet</span>
-<span class="kw">fn</span> <span class="fn">iterFold</span>(x, drv, iters) {
-    y = x * drv;
-    <span class="kw">for</span> (k = <span class="num">0.0</span>; <span class="fn">lt</span>(k, <span class="num">12.0</span>); <span class="num">1.0</span>) {
-        <span class="kw">if</span> (<span class="fn">ge</span>(k, iters)) { <span class="kw">break</span>; }
-        <span class="kw">if</span> (<span class="fn">lt</span>(<span class="fn">abs</span>(y), <span class="num">0.02</span>)) { <span class="kw">continue</span>; }
-        y = <span class="fn">fold</span>(y, <span class="num">-1.0</span>, <span class="num">1.0</span>);
-    }
-    <span class="kw">return</span> y * <span class="num">0.65</span>;
-}
-drive = <span class="num">1.0</span> + p1 * <span class="num">7.0</span>;
-iters = <span class="num">1.0</span> + p2 * <span class="num">11.0</span>;
-outL = <span class="fn">mix</span>(inL, <span class="fn">iterFold</span>(inL, drive, iters), p3);
-outR = <span class="fn">mix</span>(inR, <span class="fn">iterFold</span>(inR, drive, iters), p3);</pre>
+        <h3>Tilt EQ</h3>
+        <pre><span class="comment"># @p1: Tilt  @p2: Focus  @p3: Wet</span>
+cut = <span class="num">0.018</span> + p2 * <span class="num">0.16</span>;
+lowL = <span class="fn">lpf1</span>(inL, cut, <span class="num">0</span>);
+lowR = <span class="fn">lpf1</span>(inR, cut, <span class="num">1</span>);
+highL = inL - lowL;
+highR = inR - lowR;
+tilt = (p1 - <span class="num">0.5</span>) * <span class="num">2.0</span>;
+lowGain = <span class="num">1.0</span> - tilt * <span class="num">0.55</span>;
+highGain = <span class="num">1.0</span> + tilt * <span class="num">0.75</span>;
+outL = <span class="fn">mix</span>(inL, <span class="fn">tanh</span>(lowL * lowGain + highL * highGain), p3);
+outR = <span class="fn">mix</span>(inR, <span class="fn">tanh</span>(lowR * lowGain + highR * highGain), p3);</pre>
       </div>
 
       <div class="example-card">
-        <h3>Envelope duck tremolo</h3>
-        <pre><span class="comment"># @p1: Rate  @p2: Duck depth</span>
-envL = <span class="fn">env</span>(inL, <span class="num">0.25</span>, <span class="num">0.01</span>, <span class="num">0</span>);
-envR = <span class="fn">env</span>(inR, <span class="num">0.25</span>, <span class="num">0.01</span>, <span class="num">1</span>);
-mod  = <span class="num">0.5</span> + <span class="num">0.5</span> * <span class="fn">pulse</span>(<span class="num">2.0</span> + p1 * <span class="num">8.0</span>, <span class="num">0.5</span>);
-dL   = <span class="fn">clamp</span>(<span class="num">1.0</span> - envL * (<span class="num">0.7</span> + p2), <span class="num">0.2</span>, <span class="num">1.0</span>);
-dR   = <span class="fn">clamp</span>(<span class="num">1.0</span> - envR * (<span class="num">0.7</span> + p2), <span class="num">0.2</span>, <span class="num">1.0</span>);
-outL = inL * <span class="fn">mix</span>(dL, <span class="num">1.0</span>, mod);
-outR = inR * <span class="fn">mix</span>(dR, <span class="num">1.0</span>, mod);</pre>
+        <h3>Ping-pong delay</h3>
+        <pre><span class="comment"># @p1: Time  @p2: Feedback  @p3: Wet</span>
+dtime = (<span class="num">0.05</span> + p1 * <span class="num">0.45</span>) * sr;
+fb = p2 * <span class="num">0.7</span>;
+dL = <span class="fn">delay</span>(inL + state_pingR * fb, dtime, <span class="num">0</span>);
+dR = <span class="fn">delay</span>(inR + state_pingL * fb, dtime, <span class="num">1</span>);
+state_pingL = dL;
+state_pingR = dR;
+outL = <span class="fn">mix</span>(inL, dR, p3);
+outR = <span class="fn">mix</span>(inR, dL, p3);</pre>
       </div>
 
     </div>
@@ -393,8 +394,8 @@ outR = inR * <span class="fn">mix</span>(dR, <span class="num">1.0</span>, mod);
   <div class="container">
     <h2>Language reference</h2>
     <p style="color:var(--dim);margin-bottom:24px;">
-      For the full manual with tutorials and design patterns, see
-      <a href="LANGUAGE_SPEC.md">docs/LANGUAGE_SPEC.md</a>.
+      For the full manual with tutorials and design patterns, see the
+      <a href="language_spec.html">Language Manual</a>.
     </p>
 
     <table class="ref-table">
@@ -450,10 +451,16 @@ outR = inR * <span class="fn">mix</span>(dR, <span class="num">1.0</span>, mod);
         <tr><td>env(x, atk, rel [, id])</td><td>Envelope follower with asymmetric smoothing</td></tr>
 
         <tr class="section-header"><td colspan="2">Delay &amp; saturation</td></tr>
-        <tr><td>delay(x, samples [, id])</td><td>Delay line — 1–96000 samples per lane</td></tr>
+        <tr><td>delay(x, samples [, id])</td><td>Fractional delay line — 1–96000 samples per lane, linearly interpolated</td></tr>
         <tr><td>sat(x, drive [, mode])</td><td>Soft-clipper: mode 0=tanh, 1=atan, 2=cubic</td></tr>
 
-        <tr class="section-header"><td colspan="2">Comparison (return 1.0 / 0.0)</td></tr>
+        <tr class="section-header"><td colspan="2">Operators (arithmetic, comparison, logical, bitwise)</td></tr>
+        <tr><td>a + b, a - b, a * b, a / b</td><td>Arithmetic (division returns 0 when divisor ≈ 0)</td></tr>
+        <tr><td>a &lt; b, a &gt; b, a == b, a != b</td><td>Comparison — return 1.0 (true) or 0.0 (false)</td></tr>
+        <tr><td>!a, a &amp;&amp; b, a || b</td><td>Logical NOT, AND, OR — short-circuit, return 1.0/0.0</td></tr>
+        <tr><td>a &amp; b, a | b, a ^ b</td><td>Bitwise AND, OR, XOR (operands cast to int32)</td></tr>
+        <tr><td>a &lt;&lt; b, a &gt;&gt; b</td><td>Bit-shift left / arithmetic right</td></tr>
+        <tr class="section-header"><td colspan="2">Comparison functions (return 1.0 / 0.0)</td></tr>
         <tr><td>gt(a, b), lt(a, b)</td><td>Greater-than, less-than</td></tr>
         <tr><td>ge(a, b), le(a, b)</td><td>Greater-or-equal, less-or-equal</td></tr>
         <tr><td>select(cond, a, b)</td><td>Returns a if cond ≠ 0, else b</td></tr>
@@ -493,7 +500,8 @@ outR = inR * <span class="fn">mix</span>(dR, <span class="num">1.0</span>, mod);
       audio_scripter &nbsp;·&nbsp;
       <a href="https://github.com/krahd/audio_scripter">GitHub</a> &nbsp;·&nbsp;
       <a href="https://github.com/krahd/audio_scripter/releases">Releases</a> &nbsp;·&nbsp;
-      <a href="LANGUAGE_SPEC.md">Language manual</a> &nbsp;·&nbsp;
+      <a href="language_spec.html">Language Manual</a> &nbsp;·&nbsp;
+      <a href="developer_guide.html">Dev Guide</a> &nbsp;·&nbsp;
       <a href="https://github.com/krahd/audio_scripter/blob/main/LICENSE">MIT License</a>
     </p>
   </div>

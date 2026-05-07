@@ -8,6 +8,12 @@ namespace scripting
 namespace
 {
 constexpr int kMaxStatements = 256;
+constexpr float kEqualityTolerance = 1.0e-6f;
+
+float finiteOrZero (float x)
+{
+    return std::isfinite (x) ? x : 0.0f;
+}
 
 bool consumeInstruction (EvalContext& ctx)
 {
@@ -30,30 +36,59 @@ struct NumberExpr final : Expr
 
 struct VariableExpr final : Expr
 {
-    explicit VariableExpr (juce::String n) : name (std::move (n)) {}
-    float evaluate (EvalContext& ctx) const override { return ctx.getValue (name); }
+    explicit VariableExpr (VarRef r) : ref (std::move (r)) {}
+    float evaluate (EvalContext& ctx) const override { return ctx.getValue (ref); }
 
-    juce::String name;
+    VarRef ref;
 };
 
 struct BinaryExpr final : Expr
 {
-    enum class Op { add, sub, mul, div };
+    enum class Op { add, sub, mul, div,
+                    less, lessEqual, greater, greaterEqual, equalEqual, notEqual,
+                    logicalAnd, logicalOr,
+                    bitwiseAnd, bitwiseOr, bitwiseXor,
+                    shiftLeft, shiftRight };
 
     BinaryExpr (Op o, std::unique_ptr<Expr> l, std::unique_ptr<Expr> r)
         : op (o), left (std::move (l)), right (std::move (r)) {}
 
     float evaluate (EvalContext& ctx) const override
     {
+        // Short-circuit logical operators
+        if (op == Op::logicalAnd)
+        {
+            if (left->evaluate (ctx) == 0.0f) return 0.0f;
+            return right->evaluate (ctx) != 0.0f ? 1.0f : 0.0f;
+        }
+        if (op == Op::logicalOr)
+        {
+            if (left->evaluate (ctx) != 0.0f) return 1.0f;
+            return right->evaluate (ctx) != 0.0f ? 1.0f : 0.0f;
+        }
+
         const auto l = left->evaluate (ctx);
         const auto r = right->evaluate (ctx);
 
         switch (op)
         {
-            case Op::add: return l + r;
-            case Op::sub: return l - r;
-            case Op::mul: return l * r;
-            case Op::div: return std::abs (r) < 1.0e-9f ? 0.0f : l / r;
+            case Op::add:        return l + r;
+            case Op::sub:        return l - r;
+            case Op::mul:        return l * r;
+            case Op::div:        return std::abs (r) < 1.0e-9f ? 0.0f : l / r;
+            case Op::less:         return l <  r ? 1.0f : 0.0f;
+            case Op::lessEqual:    return l <= r ? 1.0f : 0.0f;
+            case Op::greater:      return l >  r ? 1.0f : 0.0f;
+            case Op::greaterEqual: return l >= r ? 1.0f : 0.0f;
+            case Op::equalEqual: return std::abs (l - r) <= kEqualityTolerance ? 1.0f : 0.0f;
+            case Op::notEqual:   return std::abs (l - r) >  kEqualityTolerance ? 1.0f : 0.0f;
+            case Op::bitwiseAnd: return (float) ((int32_t) l & (int32_t) r);
+            case Op::bitwiseOr:  return (float) ((int32_t) l | (int32_t) r);
+            case Op::bitwiseXor: return (float) ((int32_t) l ^ (int32_t) r);
+            case Op::shiftLeft:  return (float) ((int32_t) l << ((int32_t) r & 31));
+            case Op::shiftRight: return (float) ((int32_t) l >> ((int32_t) r & 31));
+            case Op::logicalAnd:
+            case Op::logicalOr:  break;
         }
 
         return 0.0f;
@@ -68,6 +103,14 @@ struct UnaryExpr final : Expr
 {
     explicit UnaryExpr (std::unique_ptr<Expr> e) : expr (std::move (e)) {}
     float evaluate (EvalContext& ctx) const override { return -expr->evaluate (ctx); }
+
+    std::unique_ptr<Expr> expr;
+};
+
+struct UnaryNotExpr final : Expr
+{
+    explicit UnaryNotExpr (std::unique_ptr<Expr> e) : expr (std::move (e)) {}
+    float evaluate (EvalContext& ctx) const override { return expr->evaluate (ctx) != 0.0f ? 0.0f : 1.0f; }
 
     std::unique_ptr<Expr> expr;
 };
@@ -152,7 +195,7 @@ void ForStatement::execute (EvalContext& ctx) const
 
     while (! ctx.executionAborted && ! ctx.returnTriggered)
     {
-        ctx.locals[varName] = i;
+        ctx.setValue (loopVar, i);
 
         const auto cond = isLegacyRangeLoop
                             ? (i < legacyEnd ? 1.0f : 0.0f)
@@ -213,7 +256,7 @@ void AssignmentStatement::execute (EvalContext& ctx) const
         return;
 
     if (expression != nullptr)
-        ctx.setValue (variableName, expression->evaluate (ctx));
+        ctx.setValue (variable, expression->evaluate (ctx));
 }
 
 void ExpressionStatement::execute (EvalContext& ctx) const
@@ -227,43 +270,77 @@ void ExpressionStatement::execute (EvalContext& ctx) const
 
 float FunctionCallExpr::evaluate (EvalContext& ctx) const
 {
-    std::vector<float> values;
-    values.reserve (arguments.size());
+    if ((int) ctx.callArgFrames.size() <= ctx.callArgDepth)
+        ctx.callArgFrames.emplace_back();
+
+    // Capture the index rather than a reference: evaluating arguments can trigger nested
+    // FunctionCallExpr::evaluate calls which call emplace_back(), reallocating callArgFrames
+    // and invalidating any reference taken before argument evaluation completes.
+    const auto depthIdx = (size_t) ctx.callArgDepth++;
+    ctx.callArgFrames[depthIdx].clear();
+    ctx.callArgFrames[depthIdx].reserve (arguments.size());
     for (const auto& arg : arguments)
-        values.push_back (arg != nullptr ? arg->evaluate (ctx) : 0.0f);
+    {
+        // Evaluate first, then re-index: avoids dangling ref if callArgFrames grew during eval.
+        const float v = arg != nullptr ? arg->evaluate (ctx) : 0.0f;
+        ctx.callArgFrames[depthIdx].push_back (v);
+    }
+
+    // All args evaluated — callArgFrames won't grow further, so a reference is stable here.
+    const auto& values = ctx.callArgFrames[depthIdx];
 
     if (ctx.functionRegistry == nullptr)
+    {
+        --ctx.callArgDepth;
         return 0.0f;
+    }
 
-    const auto fnLower = functionName.toLowerCase();
-
-    if (const auto it = ctx.functionRegistry->builtins.find (fnLower); it != ctx.functionRegistry->builtins.end())
-        return it->second (ctx, values);
+    if (const auto it = ctx.functionRegistry->builtins.find (functionNameLower); it != ctx.functionRegistry->builtins.end())
+    {
+        const auto savedSlotBase = ctx.builtinSlotBase;
+        ctx.builtinSlotBase = preResolvedStateSlotBase;
+        --ctx.callArgDepth;
+        const auto result = it->second (ctx, values);
+        ctx.builtinSlotBase = savedSlotBase;
+        return result;
+    }
 
     if (const auto uit = ctx.functionRegistry->user.find (functionName); uit != ctx.functionRegistry->user.end() && uit->second != nullptr)
     {
         if (ctx.recursionDepth >= ctx.maxRecursionDepth)
         {
             ctx.executionAborted = true;
+            --ctx.callArgDepth;
             return 0.0f;
         }
 
         auto* fn = uit->second;
         if (fn->body == nullptr)
+        {
+            --ctx.callArgDepth;
             return 0.0f;
+        }
         if (values.size() != fn->parameters.size())
+        {
+            --ctx.callArgDepth;
             return 0.0f;
+        }
 
         auto savedLocals = ctx.locals;
         const auto previousReturnTriggered = ctx.returnTriggered;
         const auto previousReturnValue = ctx.returnValue;
+        const auto previousBreakTriggered = ctx.breakTriggered;
+        const auto previousContinueTriggered = ctx.continueTriggered;
 
+        std::fill (ctx.locals.begin(), ctx.locals.end(), 0.0f);
         ctx.returnTriggered = false;
+        ctx.breakTriggered = false;
+        ctx.continueTriggered = false;
         ctx.returnValue = 0.0f;
         ++ctx.recursionDepth;
 
-        for (size_t i = 0; i < fn->parameters.size(); ++i)
-            ctx.locals[fn->parameters[i]] = i < values.size() ? values[i] : 0.0f;
+        for (size_t i = 0; i < fn->parameterSlots.size(); ++i)
+            ctx.setValue ({ VarKind::Local, fn->parameterSlots[i], {} }, i < values.size() ? values[i] : 0.0f);
 
         fn->body->execute (ctx);
 
@@ -271,69 +348,99 @@ float FunctionCallExpr::evaluate (EvalContext& ctx) const
         ctx.locals = std::move (savedLocals);
         ctx.returnTriggered = previousReturnTriggered;
         ctx.returnValue = previousReturnValue;
+        ctx.breakTriggered = previousBreakTriggered;
+        ctx.continueTriggered = previousContinueTriggered;
         --ctx.recursionDepth;
+        --ctx.callArgDepth;
         return callValue;
     }
 
+    --ctx.callArgDepth;
     return 0.0f;
 }
 
-float EvalContext::getValue (const juce::String& name) const
+float EvalContext::getValue (const VarRef& ref) const
 {
-    if (name == "inL")  return inL;
-    if (name == "inR")  return inR;
-    if (name == "outL") return outL;
-    if (name == "outR") return outR;
-    if (name == "sr")   return sr;
-    if (name == "t")    return t;
-
-    if (macros != nullptr)
+    switch (ref.kind)
     {
-        if (name == "p1") return (*macros)[0];
-        if (name == "p2") return (*macros)[1];
-        if (name == "p3") return (*macros)[2];
-        if (name == "p4") return (*macros)[3];
-        if (name == "p5") return (*macros)[4];
-        if (name == "p6") return (*macros)[5];
-        if (name == "p7") return (*macros)[6];
-        if (name == "p8") return (*macros)[7];
+        case VarKind::Input:
+            if (ref.slot == 0) return inL;
+            if (ref.slot == 1) return inR;
+            return 0.0f;
+
+        case VarKind::Output:
+            if (ref.slot == 0) return outL;
+            if (ref.slot == 1) return outR;
+            return 0.0f;
+
+        case VarKind::SampleRate:
+            return sr;
+
+        case VarKind::Time:
+            return t;
+
+        case VarKind::Macro:
+            if (macros != nullptr && ref.slot >= 0 && ref.slot < kNumMacros)
+                return (*macros)[(size_t) ref.slot];
+            return 0.0f;
+
+        case VarKind::Local:
+            if (ref.slot >= 0 && ref.slot < (int) locals.size())
+                return locals[(size_t) ref.slot];
+            return 0.0f;
+
+        case VarKind::State:
+            if (stateSlots != nullptr && ref.slot >= 0 && ref.slot < (int) stateSlots->size())
+                return (*stateSlots)[(size_t) ref.slot];
+            return 0.0f;
+
+        case VarKind::Unknown:
+            break;
     }
-
-    if (const auto it = locals.find (name); it != locals.end())
-        return it->second;
-
-    if (persistentState != nullptr)
-        if (const auto it = persistentState->find (name); it != persistentState->end())
-            return it->second;
 
     return 0.0f;
 }
 
-void EvalContext::setValue (const juce::String& name, float value)
+void EvalContext::setValue (const VarRef& ref, float value)
 {
-    if (name == "outL") { outL = value; return; }
-    if (name == "outR") { outR = value; return; }
-    if (macros != nullptr)
-    {
-        const auto clamped = std::clamp (value, 0.0f, 1.0f);
-        if (name == "p1") { (*macros)[0] = clamped; return; }
-        if (name == "p2") { (*macros)[1] = clamped; return; }
-        if (name == "p3") { (*macros)[2] = clamped; return; }
-        if (name == "p4") { (*macros)[3] = clamped; return; }
-        if (name == "p5") { (*macros)[4] = clamped; return; }
-        if (name == "p6") { (*macros)[5] = clamped; return; }
-        if (name == "p7") { (*macros)[6] = clamped; return; }
-        if (name == "p8") { (*macros)[7] = clamped; return; }
-    }
+    value = finiteOrZero (value);
 
-    if (name.startsWith ("state_"))
+    switch (ref.kind)
     {
-        if (persistentState != nullptr)
-            (*persistentState)[name] = value;
-        return;
-    }
+        case VarKind::Output:
+            if (ref.slot == 0) outL = value;
+            else if (ref.slot == 1) outR = value;
+            return;
 
-    locals[name] = value;
+        case VarKind::Macro:
+            if (macros != nullptr && ref.slot >= 0 && ref.slot < kNumMacros)
+                (*macros)[(size_t) ref.slot] = std::clamp (value, 0.0f, 1.0f);
+            return;
+
+        case VarKind::Local:
+            if (ref.slot >= 0)
+            {
+                if ((size_t) ref.slot >= locals.size())
+                    locals.resize ((size_t) ref.slot + 1, 0.0f);
+                locals[(size_t) ref.slot] = value;
+            }
+            return;
+
+        case VarKind::State:
+            if (stateSlots != nullptr && ref.slot >= 0)
+            {
+                if ((size_t) ref.slot >= stateSlots->size())
+                    stateSlots->resize ((size_t) ref.slot + 1, 0.0f);
+                (*stateSlots)[(size_t) ref.slot] = value;
+            }
+            return;
+
+        case VarKind::Input:
+        case VarKind::SampleRate:
+        case VarKind::Time:
+        case VarKind::Unknown:
+            return;
+    }
 }
 
 ParseResult ScriptParser::parse (const juce::String& source)
@@ -341,6 +448,10 @@ ParseResult ScriptParser::parse (const juce::String& source)
     ParseResult result;
     tokenizer = std::make_unique<ScriptTokenizer> (source);
     errors = &result.errors;
+    localSlots.clear();
+    stateSlots.clear();
+    builtinStateSlots.clear();
+    stateSlotNames.clear();
 
     while (peek().type != TokenType::end)
     {
@@ -360,6 +471,9 @@ ParseResult ScriptParser::parse (const juce::String& source)
     if (result.program.statements.empty())
         errors->add ("Script is empty. Add at least one statement.");
 
+    result.program.localSlotCount = (int) localSlots.size();
+    result.program.stateSlotNames = stateSlotNames;
+
     return result;
 }
 
@@ -367,23 +481,20 @@ std::unique_ptr<Statement> ScriptParser::parseStatement()
 {
     const auto token = peek();
 
-    switch (token.type)
-    {
-        case TokenType::kw_if:     return parseIf();
-        case TokenType::kw_while:  return parseWhile();
-        case TokenType::kw_for:    return parseFor();
-        case TokenType::kw_fn:     return parseFunctionDef();
-        case TokenType::kw_return: return parseReturn();
-        case TokenType::kw_break:  return parseBreak();
-        case TokenType::kw_continue:return parseContinue();
-        case TokenType::leftBrace: return parseBlock();
-        case TokenType::identifier:return parseAssignmentOrExpr();
-        default:
-            errors->add ("Line " + juce::String (token.line)
-                         + ": unexpected token at statement start: '" + token.text + "'.");
-            consume();
-            return nullptr;
-    }
+    if (token.type == TokenType::kw_if)       return parseIf();
+    if (token.type == TokenType::kw_while)    return parseWhile();
+    if (token.type == TokenType::kw_for)      return parseFor();
+    if (token.type == TokenType::kw_fn)       return parseFunctionDef();
+    if (token.type == TokenType::kw_return)   return parseReturn();
+    if (token.type == TokenType::kw_break)    return parseBreak();
+    if (token.type == TokenType::kw_continue) return parseContinue();
+    if (token.type == TokenType::leftBrace)   return parseBlock();
+    if (token.type == TokenType::identifier)  return parseAssignmentOrExpr();
+
+    errors->add ("Line " + juce::String (token.line)
+                 + ": unexpected token at statement start: '" + token.text + "'.");
+    consume();
+    return nullptr;
 }
 
 std::unique_ptr<BlockStatement> ScriptParser::parseBlock()
@@ -505,7 +616,7 @@ std::unique_ptr<Statement> ScriptParser::parseFor()
     auto body = parseStatement();
 
     auto node = std::make_unique<ForStatement>();
-    node->varName = id.text;
+    node->loopVar = resolveVariableRef (id.text);
     node->startExpr = std::move (start);
     node->conditionExpr = std::move (condition);
     node->stepExpr = std::move (step);
@@ -529,6 +640,7 @@ std::unique_ptr<Statement> ScriptParser::parseFunctionDef()
         return nullptr;
 
     std::vector<juce::String> params;
+    std::vector<int> parameterSlots;
 
     if (peek().type != TokenType::rightParen)
     {
@@ -542,6 +654,7 @@ std::unique_ptr<Statement> ScriptParser::parseFunctionDef()
             }
 
             params.push_back (param.text);
+            parameterSlots.push_back (getOrCreateLocalSlot (param.text));
             if (peek().type == TokenType::comma)
             {
                 consume();
@@ -560,6 +673,7 @@ std::unique_ptr<Statement> ScriptParser::parseFunctionDef()
     auto node = std::make_unique<FunctionDefStatement>();
     node->name = id.text;
     node->parameters = std::move (params);
+    node->parameterSlots = std::move (parameterSlots);
     node->body = std::move (body);
     return node;
 }
@@ -605,7 +719,7 @@ std::unique_ptr<Statement> ScriptParser::parseAssignmentOrExpr()
             return nullptr;
 
         auto node = std::make_unique<AssignmentStatement>();
-        node->variableName = id.text;
+        node->variable = resolveVariableRef (id.text);
         node->expression = std::move (expr);
         return node;
     }
@@ -643,6 +757,7 @@ std::unique_ptr<Statement> ScriptParser::parseAssignmentOrExpr()
 
         auto call = std::make_unique<FunctionCallExpr>();
         call->functionName = id.text;
+        call->functionNameLower = id.text.toLowerCase();
         call->arguments = std::move (args);
 
         auto exprStmt = std::make_unique<ExpressionStatement>();
@@ -654,13 +769,182 @@ std::unique_ptr<Statement> ScriptParser::parseAssignmentOrExpr()
         return nullptr;
 
     auto exprStmt = std::make_unique<ExpressionStatement>();
-    exprStmt->expression = std::make_unique<VariableExpr> (id.text);
+    exprStmt->expression = std::make_unique<VariableExpr> (resolveVariableRef (id.text));
     return exprStmt;
 }
 
 std::unique_ptr<Expr> ScriptParser::parseExpression()
 {
-    return parseAddSub();
+    return parseLogicalOr();
+}
+
+std::unique_ptr<Expr> ScriptParser::parseLogicalOr()
+{
+    auto left = parseLogicalAnd();
+    if (left == nullptr)
+        return {};
+
+    while (peek().type == TokenType::orOr)
+    {
+        consume();
+        auto right = parseLogicalAnd();
+        if (right == nullptr)
+            return {};
+        left = std::make_unique<BinaryExpr> (BinaryExpr::Op::logicalOr, std::move (left), std::move (right));
+    }
+
+    return left;
+}
+
+std::unique_ptr<Expr> ScriptParser::parseLogicalAnd()
+{
+    auto left = parseBitwiseOr();
+    if (left == nullptr)
+        return {};
+
+    while (peek().type == TokenType::andAnd)
+    {
+        consume();
+        auto right = parseBitwiseOr();
+        if (right == nullptr)
+            return {};
+        left = std::make_unique<BinaryExpr> (BinaryExpr::Op::logicalAnd, std::move (left), std::move (right));
+    }
+
+    return left;
+}
+
+std::unique_ptr<Expr> ScriptParser::parseBitwiseOr()
+{
+    auto left = parseBitwiseXor();
+    if (left == nullptr)
+        return {};
+
+    while (peek().type == TokenType::pipe)
+    {
+        consume();
+        auto right = parseBitwiseXor();
+        if (right == nullptr)
+            return {};
+        left = std::make_unique<BinaryExpr> (BinaryExpr::Op::bitwiseOr, std::move (left), std::move (right));
+    }
+
+    return left;
+}
+
+std::unique_ptr<Expr> ScriptParser::parseBitwiseXor()
+{
+    auto left = parseBitwiseAnd();
+    if (left == nullptr)
+        return {};
+
+    while (peek().type == TokenType::caret)
+    {
+        consume();
+        auto right = parseBitwiseAnd();
+        if (right == nullptr)
+            return {};
+        left = std::make_unique<BinaryExpr> (BinaryExpr::Op::bitwiseXor, std::move (left), std::move (right));
+    }
+
+    return left;
+}
+
+std::unique_ptr<Expr> ScriptParser::parseBitwiseAnd()
+{
+    auto left = parseEquality();
+    if (left == nullptr)
+        return {};
+
+    while (peek().type == TokenType::ampersand)
+    {
+        consume();
+        auto right = parseEquality();
+        if (right == nullptr)
+            return {};
+        left = std::make_unique<BinaryExpr> (BinaryExpr::Op::bitwiseAnd, std::move (left), std::move (right));
+    }
+
+    return left;
+}
+
+std::unique_ptr<Expr> ScriptParser::parseEquality()
+{
+    auto left = parseComparison();
+    if (left == nullptr)
+        return {};
+
+    while (true)
+    {
+        const auto token = peek();
+        if (token.type != TokenType::equalEqual && token.type != TokenType::notEqual)
+            break;
+
+        consume();
+        auto right = parseComparison();
+        if (right == nullptr)
+            return {};
+
+        const auto op = token.type == TokenType::equalEqual ? BinaryExpr::Op::equalEqual
+                                                             : BinaryExpr::Op::notEqual;
+        left = std::make_unique<BinaryExpr> (op, std::move (left), std::move (right));
+    }
+
+    return left;
+}
+
+std::unique_ptr<Expr> ScriptParser::parseComparison()
+{
+    auto left = parseShift();
+    if (left == nullptr)
+        return {};
+
+    while (true)
+    {
+        const auto token = peek();
+        if (token.type != TokenType::less && token.type != TokenType::lessEqual
+         && token.type != TokenType::greater && token.type != TokenType::greaterEqual)
+            break;
+
+        consume();
+        auto right = parseShift();
+        if (right == nullptr)
+            return {};
+
+        BinaryExpr::Op op;
+        if      (token.type == TokenType::less)         op = BinaryExpr::Op::less;
+        else if (token.type == TokenType::lessEqual)    op = BinaryExpr::Op::lessEqual;
+        else if (token.type == TokenType::greater)      op = BinaryExpr::Op::greater;
+        else                                            op = BinaryExpr::Op::greaterEqual;
+        left = std::make_unique<BinaryExpr> (op, std::move (left), std::move (right));
+    }
+
+    return left;
+}
+
+std::unique_ptr<Expr> ScriptParser::parseShift()
+{
+    auto left = parseAddSub();
+    if (left == nullptr)
+        return {};
+
+    while (true)
+    {
+        const auto token = peek();
+        if (token.type != TokenType::shiftLeft && token.type != TokenType::shiftRight)
+            break;
+
+        consume();
+        auto right = parseAddSub();
+        if (right == nullptr)
+            return {};
+
+        const auto op = token.type == TokenType::shiftLeft ? BinaryExpr::Op::shiftLeft
+                                                           : BinaryExpr::Op::shiftRight;
+        left = std::make_unique<BinaryExpr> (op, std::move (left), std::move (right));
+    }
+
+    return left;
 }
 
 std::unique_ptr<Expr> ScriptParser::parseAddSub()
@@ -725,6 +1009,16 @@ std::unique_ptr<Expr> ScriptParser::parseUnary()
         return std::make_unique<UnaryExpr> (std::move (expr));
     }
 
+    if (peek().type == TokenType::notOp)
+    {
+        consume();
+        auto expr = parseUnary();
+        if (expr == nullptr)
+            return {};
+
+        return std::make_unique<UnaryNotExpr> (std::move (expr));
+    }
+
     return parsePrimary();
 }
 
@@ -749,7 +1043,7 @@ std::unique_ptr<Expr> ScriptParser::parsePrimary()
     if (token.type == TokenType::identifier)
     {
         if (peek().type != TokenType::leftParen)
-            return std::make_unique<VariableExpr> (token.text);
+            return std::make_unique<VariableExpr> (resolveVariableRef (token.text));
 
         consume();
 
@@ -778,7 +1072,9 @@ std::unique_ptr<Expr> ScriptParser::parsePrimary()
 
         auto call = std::make_unique<FunctionCallExpr>();
         call->functionName = token.text;
+        call->functionNameLower = token.text.toLowerCase();
         call->arguments = std::move (args);
+        tryResolveBuiltinStateSlots (*call);
         return call;
     }
 
@@ -816,5 +1112,98 @@ Token ScriptParser::consume()
 Token ScriptParser::peek()
 {
     return tokenizer->peek();
+}
+
+VarRef ScriptParser::resolveVariableRef (const juce::String& name)
+{
+    if (name == "inL")  return { VarKind::Input, 0, {} };
+    if (name == "inR")  return { VarKind::Input, 1, {} };
+    if (name == "outL") return { VarKind::Output, 0, {} };
+    if (name == "outR") return { VarKind::Output, 1, {} };
+    if (name == "sr")   return { VarKind::SampleRate, 0, {} };
+    if (name == "t")    return { VarKind::Time, 0, {} };
+
+    if (name.length() == 2 && name[0] == 'p')
+    {
+        const auto d = (int) name[1] - (int) '1';
+        if (d >= 0 && d < kNumMacros)
+            return { VarKind::Macro, d, {} };
+    }
+
+    if (name.startsWith ("state_"))
+        return { VarKind::State, getOrCreateStateSlot (name), {} };
+
+    return { VarKind::Local, getOrCreateLocalSlot (name), {} };
+}
+
+int ScriptParser::getOrCreateLocalSlot (const juce::String& name)
+{
+    if (const auto it = localSlots.find (name); it != localSlots.end())
+        return it->second;
+
+    const auto slot = (int) localSlots.size();
+    localSlots[name] = slot;
+    return slot;
+}
+
+int ScriptParser::getOrCreateStateSlot (const juce::String& name)
+{
+    if (const auto it = stateSlots.find (name); it != stateSlots.end())
+        return it->second;
+
+    // Use stateSlotNames.size() (not stateSlots.size()) so that user state slots
+    // and pre-resolved builtin state slots share the same contiguous index space.
+    const auto slot = (int) stateSlotNames.size();
+    stateSlots[name] = slot;
+    stateSlotNames.push_back (name);
+    return slot;
+}
+
+int ScriptParser::getOrCreateBuiltinStateSlotBase (const juce::String& key, int numSlots)
+{
+    if (const auto it = builtinStateSlots.find (key); it != builtinStateSlots.end())
+        return it->second;
+
+    const auto base = (int) stateSlotNames.size();
+    builtinStateSlots[key] = base;
+    for (int i = 0; i < numSlots; ++i)
+        stateSlotNames.push_back (key + "_" + juce::String (i));
+    return base;
+}
+
+void ScriptParser::tryResolveBuiltinStateSlots (FunctionCallExpr& call)
+{
+    struct BuiltinInfo { int laneArgIndex; int numSlots; };
+    static const std::pair<const char*, BuiltinInfo> table[] = {
+        { "lpf1", { 2, 1 } },
+        { "hp1",  { 2, 1 } },
+        { "bp1",  { 3, 2 } },
+        { "svf",  { 4, 2 } },
+        { "slew", { 2, 1 } },
+        { "env",  { 3, 1 } },
+    };
+
+    for (const auto& entry : table)
+    {
+        if (call.functionNameLower != entry.first)
+            continue;
+
+        const auto laneArgIdx = entry.second.laneArgIndex;
+        const auto numSlots   = entry.second.numSlots;
+        const auto& args      = call.arguments;
+
+        int lane = 0;
+        if (laneArgIdx < (int) args.size())
+        {
+            const auto* lit = dynamic_cast<const TypedLiteralExpr*> (args[(size_t) laneArgIdx].get());
+            if (lit == nullptr)
+                return;  // dynamic lane expression — cannot pre-resolve
+            lane = (int) std::lrint (lit->value);
+        }
+
+        const auto key = juce::String (entry.first) + "_" + juce::String (lane);
+        call.preResolvedStateSlotBase = getOrCreateBuiltinStateSlotBase (key, numSlots);
+        return;
+    }
 }
 } // namespace scripting

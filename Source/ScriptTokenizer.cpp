@@ -43,17 +43,45 @@ Token ScriptTokenizer::next()
 
     switch (c)
     {
-        case '(' : return { TokenType::leftParen, "(", 0.0, line };
+        case '(' : return { TokenType::leftParen,  "(", 0.0, line };
         case ')' : return { TokenType::rightParen, ")", 0.0, line };
-        case '{' : return { TokenType::leftBrace, "{", 0.0, line };
+        case '{' : return { TokenType::leftBrace,  "{", 0.0, line };
         case '}' : return { TokenType::rightBrace, "}", 0.0, line };
-        case ',' : return { TokenType::comma, ",", 0.0, line };
-        case '=' : return { TokenType::equal, "=", 0.0, line };
-        case ';' : return { TokenType::semicolon, ";", 0.0, line };
-        case '+' : return { TokenType::plus, "+", 0.0, line };
-        case '-' : return { TokenType::minus, "-", 0.0, line };
-        case '*' : return { TokenType::star, "*", 0.0, line };
-        case '/' : return { TokenType::slash, "/", 0.0, line };
+        case ',' : return { TokenType::comma,      ",", 0.0, line };
+        case ';' : return { TokenType::semicolon,  ";", 0.0, line };
+        case '+' : return { TokenType::plus,       "+", 0.0, line };
+        case '-' : return { TokenType::minus,      "-", 0.0, line };
+        case '*' : return { TokenType::star,       "*", 0.0, line };
+        case '/' : return { TokenType::slash,      "/", 0.0, line };
+        case '^' : return { TokenType::caret,      "^", 0.0, line };
+        case '=':
+            if (position < source.length() && source[position] == '=')
+                { ++position; return { TokenType::equalEqual, "==", 0.0, line }; }
+            return { TokenType::equal, "=", 0.0, line };
+        case '<':
+            if (position < source.length() && source[position] == '<')
+                { ++position; return { TokenType::shiftLeft, "<<", 0.0, line }; }
+            if (position < source.length() && source[position] == '=')
+                { ++position; return { TokenType::lessEqual, "<=", 0.0, line }; }
+            return { TokenType::less, "<", 0.0, line };
+        case '>':
+            if (position < source.length() && source[position] == '>')
+                { ++position; return { TokenType::shiftRight, ">>", 0.0, line }; }
+            if (position < source.length() && source[position] == '=')
+                { ++position; return { TokenType::greaterEqual, ">=", 0.0, line }; }
+            return { TokenType::greater, ">", 0.0, line };
+        case '!':
+            if (position < source.length() && source[position] == '=')
+                { ++position; return { TokenType::notEqual, "!=", 0.0, line }; }
+            return { TokenType::notOp, "!", 0.0, line };
+        case '&':
+            if (position < source.length() && source[position] == '&')
+                { ++position; return { TokenType::andAnd, "&&", 0.0, line }; }
+            return { TokenType::ampersand, "&", 0.0, line };
+        case '|':
+            if (position < source.length() && source[position] == '|')
+                { ++position; return { TokenType::orOr, "||", 0.0, line }; }
+            return { TokenType::pipe, "|", 0.0, line };
         default: break;
     }
 

@@ -1,116 +1,120 @@
-# AGENTS.md
+# Agent Instructions — audio_scripter
 
-Repository instructions for AI coding agents working in this project.
+These instructions apply to all AI coding agents working in this repository
+(GitHub Copilot, OpenAI Codex, Claude, and compatible tools).
 
-This file is the durable source of truth for GitHub Copilot, OpenAI Codex, Claude Code, and compatible coding agents. Read it before making changes. Follow the most specific applicable instruction when several instruction files exist.
+---
 
-## 1: Non-negotiable rules
+## Repository overview
 
-- Keep `STATUS.md` accurate at all times.
-- `STATUS.md` must exist in the repository root.
-- Do not finish a task that changes the project without reviewing and, when needed, updating `STATUS.md`.
-- Do not invent project facts. Inspect the repository and record uncertainty explicitly.
-- Do not overwrite user work or unrelated changes.
-- Do not commit secrets, credentials, tokens, private keys, local environment files, build artefacts, or generated sensitive data.
-- Prefer small, focused changes over broad rewrites.
-- Preserve existing project style unless explicitly asked to change it.
-- Verify meaningful changes with the narrowest reliable command available.
-- Do not claim that tests, builds, smoke tests, linters, type-checkers, or manual checks passed unless they were actually run.
+`audio_scripter` is a JUCE-based audio plugin (VST3 + AU) that interprets a
+domain-specific scripting language (`.ascr`) at audio-thread rate. The engine
+is intentionally minimal and allocation-free on the hot path.
 
-## 2: Communication style
+Key directories:
 
-Use terse, factual, technical communication. Do not use playful, whimsical, cute, decorative, or filler progress phrases such as "combobulating", "cooking", "thinking...", "working on it", "let me dive in", "I'll get started", or "working my magic".
+| Path | Purpose |
+|---|---|
+| `Source/` | Plugin C++ source (engine, parser, tokeniser, editor, processor) |
+| `examples/` | Bundled `.ascr` effect scripts |
+| `tests/` | CTest-based C++ unit tests |
+| `tests_python/` | Python validation tests for example scripts |
+| `tools/` | Offline render / benchmark tool (`RenderEffectReport.cpp`) |
+| `docs/` | Language spec, developer guide, changelog |
+| `scripts/` | Build and packaging shell scripts |
 
-Allowed status-update style: "Reading files." "Found the issue." "Applying patch." "Tests passed." "Tests failed: <reason>."
+---
 
-No jokes, metaphors, fake enthusiasm, anthropomorphising, or decorative progress messages. Prefer concise present-tense technical updates. Use British English for prose documentation unless the repository consistently uses another variant.
-
-## 3: Standard work loop
-
-1. Read this file and `STATUS.md` before editing.
-2. Inspect relevant files, docs, tests, build scripts, and CI workflows.
-3. Identify the smallest safe change.
-4. Search relevant call sites before changing public APIs, script syntax, DSP primitives, build settings, installer logic, or release automation.
-5. Make focused edits.
-6. Run relevant verification when possible.
-7. Update documentation when behaviour, setup, architecture, commands, or public APIs change.
-8. Update `STATUS.md` if project state changed.
-9. Report changed files, verification, and remaining issues.
-
-## 4: Project-specific map
-
-### 4.1: Project shape
-
-- Purpose: JUCE-based real-time scriptable audio effect plugin.
-- Main runtime surfaces: VST3, AU, Standalone plugin/application, script editor UI, example scripts, release installers.
-- Primary languages/frameworks: C++20, JUCE, CMake, Python validation scripts.
-- Supported platforms: macOS and Windows build/release targets; Linux primarily for CI-style validation unless otherwise documented.
-
-### 4.2: Important paths
-
-- `README.md`: human-facing overview and build instructions.
-- `STATUS.md`: complete current project status report; mandatory upkeep.
-- `CMakeLists.txt`: build configuration.
-- `Source/`: JUCE plugin source code.
-- `examples/`: `.ascr` effect scripts.
-- `docs/LANGUAGE_SPEC.md`: script language reference.
-- `docs/DEVELOPER_GUIDE.md`: architecture and release details.
-- `docs/CHANGELOG.md`: release history.
-- `tools/validate_scripts.py`: example script validator.
-- `scripts/build_release.sh`: release build/package helper.
-- `install.sh`: plugin installation helper.
-- `.github/workflows/`: CI and release automation.
-
-### 4.3: Safety invariants
-
-- Real-time audio processing must avoid allocations, blocking work, locks, and unbounded operations on the audio thread.
-- Script swaps must remain safe for live audio use.
-- DSP primitives must avoid undefined behaviour, runaway feedback, NaNs, and unbounded state growth.
-- Installer scripts must preserve backup behaviour and avoid deleting user plugin bundles without explicit safeguards.
-- Example scripts should be validated before being treated as working examples.
-
-## 5: STATUS.md maintenance
-
-`STATUS.md` is mandatory project state, not optional documentation.
-
-Required timestamp line near the top:
-
-```text
-Last updated: YYYY-MM-DD HH:MM
-```
-
-Rules:
-
-- Use exactly that format with 24-hour time.
-- Use the user's local timezone; if no other timezone is specified, use `America/Montevideo`.
-- Duplicate the exact same `Last updated` line as the final line at the bottom of `STATUS.md`.
-- Update both lines in the same edit.
-- Treat missing, stale, malformed, or mismatched timestamp lines as a blocking documentation error for tasks that change project state.
-
-`STATUS.md` must be a complete current snapshot, not a changelog. Include relevant sections for purpose, current implementation state, active focus, architecture, setup/run instructions, configuration, important files, recent changes, tests, risks, pending tasks, next steps, longer-term steps, and decisions.
-
-## 6: Diagrams in STATUS.md
-
-Include useful inline SVG architecture and flow diagrams when the project structure is meaningful enough. Keep text inside boxes and canvas bounds. Keep arrows out of unrelated boxes and labels. Prefer generous spacing and simple SVG primitives. Update diagrams only when structural or flow changes warrant it.
-
-## 7: Coding, validation, and release rules
-
-- Follow existing style, naming, layout, and architecture.
-- Preserve the script language and public behaviour unless explicitly asked to change them.
-- Add/update tests for behavioural changes when a test pattern exists.
-- Do not delete failing tests to make a suite pass.
-- Keep build/release/version references aligned across docs, CMake/project metadata, scripts, and `STATUS.md`.
-- Do not create tags, releases, or publish packages unless explicitly requested.
-
-Typical validation commands:
+## Build
 
 ```bash
-python3 tools/validate_scripts.py
-./scripts/build_release.sh --config Release --tests
-cmake --build build --target audio_scripter_parser_tests
+# Release build (VST3 + AU)
+bash scripts/build_release.sh --config Release
+
+# Debug build + install
+bash scripts/build_release.sh --config Debug --install
+
+# Run tests
 ctest --test-dir build --output-on-failure
 ```
 
-## 8: Final response requirements
+CMake 3.24+ and the JUCE 7 FetchContent dependency are required. The build
+produces artefacts under `build/audio_scripter_artefacts/`.
 
-When finishing a task, report concisely: what changed, files changed, verification commands and results, whether `STATUS.md` was updated, and remaining issues or follow-up work.
+---
+
+## Code conventions
+
+- C++17; no exceptions; no RTTI in audio-thread code.
+- The audio thread must be **allocation-free**. Never call `new`, `malloc`,
+  `std::vector::push_back` that may reallocate, or any JUCE allocating API
+  (e.g. `juce::String` construction from literals) inside
+  `ScriptEngine::processBlock` or any function it calls per-sample.
+- Prefer `float` arithmetic; avoid `double` in the engine hot path.
+- Use `juce::String` only outside the audio thread (editor, parser setup).
+- New built-in functions belong in `ScriptEngine.cpp` alongside existing ones
+  (`lpf1`, `bp1`, `svf`, `env`, `slew`, `delay`, …).
+- Parser changes belong in `ScriptParser.cpp / .h`; AST node types are defined
+  there.
+- Keep `Source/Constants.h` in sync when bumping the plugin version.
+
+---
+
+## Testing
+
+- Run the CTest suite after any engine or parser change.
+- After adding or modifying `.ascr` examples, run:
+  ```bash
+  python3 tests_python/test_validate_scripts.py
+  ```
+- For performance-sensitive changes, build the render/benchmark tool and check
+  realtime factors:
+  ```bash
+  cmake --build build --target audio_scripter_render_report
+  ./build/audio_scripter_render_report
+  ```
+  All example effects should achieve a realtime factor ≥ 1.0 at 48 kHz /
+  256-sample blocks.
+
+---
+
+## STATUS.md — mandatory upkeep
+
+**`STATUS.md` must be kept up to date at all times.**
+
+After every non-trivial change (bug fix, optimisation, new feature, refactor,
+or noteworthy investigation finding), update `STATUS.md` as part of the same
+commit or work session. The file must reflect:
+
+- The **current focus** — what is actively being worked on.
+- The **root cause** of any open bug, once identified.
+- A summary of **changes already on `main`** (add a row to the table).
+- Any new or changed **files of interest** or **diagnostic outputs**.
+- The **last updated** timestamp at the top of the file, in the format:
+
+  ```
+  Last updated: YYYY-MM-DD HH:MM
+  ```
+
+  Use the local wall-clock time (24-hour). Never leave the timestamp stale.
+
+Agents must not close a task or mark work complete without first verifying that
+`STATUS.md` accurately describes the current state of the project.
+
+---
+
+## Pull-request / commit hygiene
+
+- Commits should be atomic and focused on a single concern.
+- Commit messages: imperative mood, ≤ 72 characters on the subject line.
+- Do not commit build artefacts, `.DS_Store`, or files under `build/`.
+- Do not force-push to `main`.
+
+---
+
+## Safety rules
+
+- Do not modify or delete files under `build/` — that directory is generated.
+- Do not run `rm -rf` without explicit user confirmation.
+- Do not push to remote branches without explicit user instruction.
+- When in doubt about a destructive action, ask before proceeding.

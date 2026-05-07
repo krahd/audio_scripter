@@ -1,0 +1,26 @@
+#@p1: Carrier
+#@p2: Spread
+#@p3: Tone
+#@p4: Wet
+# p1 = 0.46
+# p2 = 0.35
+# p3 = 0.58
+# p4 = 0.74
+# Ring modulator: metallic sidebands with tone smoothing and stereo phase spread.
+# p1 = carrier frequency, p2 = stereo spread, p3 = post-filter tone, p4 = dry/wet
+carrierHz = 25.0 + p1 * 1225.0;
+spread = p2 * 3.1415926;
+modL = sin(6.2831853 * carrierHz * t);
+modR = sin(6.2831853 * carrierHz * t + spread);
+
+rawL = inL * modL;
+rawR = inR * modR;
+tone = 0.055 + (1.0 - p3) * 0.22;
+bodyL = lpf1(rawL, tone, 0);
+bodyR = lpf1(rawR, tone, 1);
+edgeL = hp1(rawL, 0.018 + p3 * 0.12, 2);
+edgeR = hp1(rawR, 0.018 + p3 * 0.12, 3);
+wetL = tanh(bodyL * 1.35 + edgeL * p3 * 0.55);
+wetR = tanh(bodyR * 1.35 + edgeR * p3 * 0.55);
+outL = mix(inL, wetL, p4);
+outR = mix(inR, wetR, p4);

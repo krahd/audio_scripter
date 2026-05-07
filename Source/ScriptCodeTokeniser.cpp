@@ -60,7 +60,7 @@ bool ScriptCodeTokeniser::isBuiltInFunction (const juce::String& ident)
         "sin", "cos", "tan", "abs", "sqrt", "exp", "log", "tanh",
         "pow", "min", "max", "clamp", "clip", "mix", "wrap", "fold",
         "crush", "smoothstep", "noise", "gt", "lt", "ge", "le", "select",
-        "pulse", "lpf1", "slew", "env"
+        "pulse", "lpf1", "hp1", "bp1", "svf", "slew", "env", "delay", "sat"
     };
 
     return names.contains (ident);
@@ -176,7 +176,7 @@ int ScriptCodeTokeniser::readNextToken (juce::CodeDocument::Iterator& source)
         while (isIdentifierBody (source.peekNextChar()))
             ident << source.nextChar();
 
-        static const juce::StringArray keywords { "if", "else", "while", "for", "fn", "return", "true", "false" };
+        static const juce::StringArray keywords { "if", "else", "while", "for", "fn", "return", "break", "continue", "true", "false" };
         if (keywords.contains (ident))
             return keyword;
 
@@ -186,9 +186,51 @@ int ScriptCodeTokeniser::readNextToken (juce::CodeDocument::Iterator& source)
         return identifier;
     }
 
-    if (c == '+' || c == '-' || c == '*' || c == '=')
+    if (c == '+' || c == '-' || c == '*' || c == '^')
     {
         source.skip();
+        return operatorToken;
+    }
+
+    if (c == '=' || c == '!')
+    {
+        source.skip();
+        if (source.peekNextChar() == '=')
+            source.skip();
+        return operatorToken;
+    }
+
+    if (c == '<')
+    {
+        source.skip();
+        const auto n = source.peekNextChar();
+        if (n == '<' || n == '=')
+            source.skip();
+        return operatorToken;
+    }
+
+    if (c == '>')
+    {
+        source.skip();
+        const auto n = source.peekNextChar();
+        if (n == '>' || n == '=')
+            source.skip();
+        return operatorToken;
+    }
+
+    if (c == '&')
+    {
+        source.skip();
+        if (source.peekNextChar() == '&')
+            source.skip();
+        return operatorToken;
+    }
+
+    if (c == '|')
+    {
+        source.skip();
+        if (source.peekNextChar() == '|')
+            source.skip();
         return operatorToken;
     }
 

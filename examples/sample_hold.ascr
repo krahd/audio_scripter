@@ -5,11 +5,17 @@
 # Sample-and-hold with slew-smoothed transitions to reduce zipper/click artifacts
 # p1 = trigger rate (0.4–14 Hz), p2 = dry/wet
 rate = 0.4 + p1 * 13.6;
-trig = pulse(rate, 0.01);
+rawTrig = pulse(rate, 0.012);
+trig = slew(rawTrig, 0.5, 2);
 if (gt(trig, 0.5)) {
     state_hL = inL;
     state_hR = inR;
 }
+
+activity = abs(inL) + abs(inR);
+decay = select(gt(activity, 0.002), 1.0, 0.965);
+state_hL = state_hL * decay;
+state_hR = state_hR * decay;
 
 # Slew prevents hard discontinuities from held-step jumps.
 heldL = slew(state_hL, 0.004 + p2 * 0.02, 0);

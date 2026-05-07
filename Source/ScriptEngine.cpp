@@ -1,8 +1,10 @@
 #include "ScriptEngine.h"
+#include "AudioScripterExampleData.h"
 
 #include <algorithm>
 #include <cmath>
 #include <memory>
+#include <vector>
 
 namespace scripting
 {
@@ -11,6 +13,60 @@ namespace
 float clampf (float x, float lo, float hi)
 {
     return std::min (hi, std::max (lo, x));
+}
+
+float finiteOrZero (float x)
+{
+    return std::isfinite (x) ? x : 0.0f;
+}
+
+float sanitizeAudio (float x)
+{
+    return clampf (finiteOrZero (x), -4.0f, 4.0f);
+}
+
+juce::String prettifyExampleName (juce::String fileName)
+{
+    auto stem = juce::File (fileName).getFileNameWithoutExtension().replaceCharacter ('_', ' ');
+    juce::StringArray words;
+    words.addTokens (stem, " ", {});
+    words.removeEmptyStrings();
+
+    for (auto& word : words)
+        if (word.isNotEmpty())
+            word = word.substring (0, 1).toUpperCase() + word.substring (1);
+
+    return words.joinIntoString (" ");
+}
+
+struct EmbeddedExample
+{
+    juce::String name;
+    juce::String resourceName;
+};
+
+std::vector<EmbeddedExample> embeddedExamples()
+{
+    std::vector<EmbeddedExample> result;
+
+    for (int i = 0; i < AudioScripterExamples::namedResourceListSize; ++i)
+    {
+        const auto* resourceName = AudioScripterExamples::namedResourceList[i];
+        const auto* originalName = AudioScripterExamples::getNamedResourceOriginalFilename (resourceName);
+        const auto fileName = juce::File (juce::String (originalName)).getFileName();
+
+        if (! fileName.endsWithIgnoreCase (".ascr"))
+            continue;
+
+        result.push_back ({ prettifyExampleName (fileName), juce::String (resourceName) });
+    }
+
+    std::sort (result.begin(), result.end(), [] (const auto& a, const auto& b)
+    {
+        return a.name.compareNatural (b.name) < 0;
+    });
+
+    return result;
 }
 
 float mixf (float a, float b, float amount)
@@ -32,19 +88,20 @@ float wrapf (float x, float lo, float hi)
 
 float foldf (float x, float lo, float hi)
 {
+    x = finiteOrZero (x);
+
     if (hi <= lo)
         return lo;
 
-    auto y = x;
-    while (y < lo || y > hi)
-    {
-        if (y > hi)
-            y = hi - (y - hi);
-        else if (y < lo)
-            y = lo + (lo - y);
-    }
+    const auto width = hi - lo;
+    const auto period = width * 2.0f;
+    auto y = std::fmod (x - lo, period);
+    if (y < 0.0f)
+        y += period;
+    if (y > width)
+        y = period - y;
 
-    return y;
+    return lo + y;
 }
 
 float smoothstepf (float edge0, float edge1, float x)
@@ -94,7 +151,7 @@ void writeLaneState (EvalContext& ctx, juce::String functionName, int lane, floa
     if (ctx.persistentState == nullptr)
         return;
 
-    (*ctx.persistentState)[stateKey (std::move (functionName), lane)] = value;
+    (*ctx.persistentState)[stateKey (std::move (functionName), lane)] = finiteOrZero (value);
 }
 
 float readLaneStateSuffix (EvalContext& ctx, juce::String functionName, int lane, juce::String suffix)
@@ -114,12 +171,30 @@ void writeLaneStateSuffix (EvalContext& ctx, juce::String functionName, int lane
     if (ctx.persistentState == nullptr)
         return;
 
-    (*ctx.persistentState)[stateKeyWithSuffix (std::move (functionName), lane, std::move (suffix))] = value;
+    (*ctx.persistentState)[stateKeyWithSuffix (std::move (functionName), lane, std::move (suffix))] = finiteOrZero (value);
 }
 
 int laneFromArgs (const std::vector<float>& args, size_t index)
 {
     return (int) std::lrint (getArg (args, index, 0.0f));
+}
+
+// Fast slot-based state access used when builtinSlotBase >= 0.
+float readBuiltinState (EvalContext& ctx, int offset)
+{
+    if (ctx.stateSlots == nullptr)
+        return 0.0f;
+    const auto idx = (size_t) (ctx.builtinSlotBase + offset);
+    return idx < ctx.stateSlots->size() ? (*ctx.stateSlots)[idx] : 0.0f;
+}
+
+void writeBuiltinState (EvalContext& ctx, int offset, float value)
+{
+    if (ctx.stateSlots == nullptr)
+        return;
+    const auto idx = (size_t) (ctx.builtinSlotBase + offset);
+    if (idx < ctx.stateSlots->size())
+        (*ctx.stateSlots)[idx] = finiteOrZero (value);
 }
 
 void registerBuiltins (FunctionRegistry& registry)
@@ -177,61 +252,108 @@ void registerBuiltins (FunctionRegistry& registry)
 
     registry.builtins["lpf1"] = [] (EvalContext& ctx, const std::vector<float>& a)
     {
-        const auto x = getArg (a, 0);
+        const auto x     = getArg (a, 0);
         const auto coeff = clampf (getArg (a, 1), 0.0f, 1.0f);
-        const auto lane = laneFromArgs (a, 2);
 
-        auto y = readLaneState (ctx, "lpf1", lane);
-        y += coeff * (x - y);
-        writeLaneState (ctx, "lpf1", lane, y);
+        float y;
+        if (ctx.builtinSlotBase >= 0)
+        {
+            y = readBuiltinState (ctx, 0);
+            y += coeff * (x - y);
+            writeBuiltinState (ctx, 0, y);
+        }
+        else
+        {
+            const auto lane = laneFromArgs (a, 2);
+            y = readLaneState (ctx, "lpf1", lane);
+            y += coeff * (x - y);
+            writeLaneState (ctx, "lpf1", lane, y);
+        }
         return y;
     };
 
     registry.builtins["hp1"] = [] (EvalContext& ctx, const std::vector<float>& a)
     {
-        const auto x = getArg (a, 0);
+        const auto x     = getArg (a, 0);
         const auto coeff = clampf (getArg (a, 1), 0.0f, 1.0f);
-        const auto lane = laneFromArgs (a, 2);
 
-        auto y = readLaneState (ctx, "hp1_lpf", lane);
-        y += coeff * (x - y);
-        writeLaneState (ctx, "hp1_lpf", lane, y);
-        return x - y;
+        float lpState;
+        if (ctx.builtinSlotBase >= 0)
+        {
+            lpState = readBuiltinState (ctx, 0);
+            lpState += coeff * (x - lpState);
+            writeBuiltinState (ctx, 0, lpState);
+        }
+        else
+        {
+            const auto lane = laneFromArgs (a, 2);
+            lpState = readLaneState (ctx, "hp1_lpf", lane);
+            lpState += coeff * (x - lpState);
+            writeLaneState (ctx, "hp1_lpf", lane, lpState);
+        }
+        return x - lpState;
     };
 
     registry.builtins["bp1"] = [] (EvalContext& ctx, const std::vector<float>& a)
     {
-        const auto x = getArg (a, 0);
+        const auto x      = getArg (a, 0);
         const auto hpCoeff = clampf (getArg (a, 1), 0.0f, 1.0f);
         const auto lpCoeff = clampf (getArg (a, 2), 0.0f, 1.0f);
-        const auto lane = laneFromArgs (a, 3);
 
-        auto hpLp = readLaneState (ctx, "bp1_hplp", lane);
-        hpLp += hpCoeff * (x - hpLp);
-        writeLaneState (ctx, "bp1_hplp", lane, hpLp);
-        const auto hp = x - hpLp;
-
-        auto bp = readLaneState (ctx, "bp1_bp", lane);
-        bp += lpCoeff * (hp - bp);
-        writeLaneState (ctx, "bp1_bp", lane, bp);
+        float hpLp, bp;
+        if (ctx.builtinSlotBase >= 0)
+        {
+            hpLp  = readBuiltinState (ctx, 0);
+            hpLp += hpCoeff * (x - hpLp);
+            writeBuiltinState (ctx, 0, hpLp);
+            const auto hp = x - hpLp;
+            bp  = readBuiltinState (ctx, 1);
+            bp += lpCoeff * (hp - bp);
+            writeBuiltinState (ctx, 1, bp);
+        }
+        else
+        {
+            const auto lane = laneFromArgs (a, 3);
+            hpLp  = readLaneState (ctx, "bp1_hplp", lane);
+            hpLp += hpCoeff * (x - hpLp);
+            writeLaneState (ctx, "bp1_hplp", lane, hpLp);
+            const auto hp = x - hpLp;
+            bp  = readLaneState (ctx, "bp1_bp", lane);
+            bp += lpCoeff * (hp - bp);
+            writeLaneState (ctx, "bp1_bp", lane, bp);
+        }
         return bp;
     };
 
     registry.builtins["svf"] = [] (EvalContext& ctx, const std::vector<float>& a)
     {
-        const auto x = getArg (a, 0);
+        const auto x      = getArg (a, 0);
         const auto cutoff = clampf (getArg (a, 1), 0.001f, 0.99f);
-        const auto q = std::max (0.05f, getArg (a, 2, 0.7f));
-        const auto mode = (int) std::lrint (getArg (a, 3, 0.0f));
-        const auto lane = laneFromArgs (a, 4);
+        const auto q      = std::max (0.05f, getArg (a, 2, 0.7f));
+        const auto mode   = (int) std::lrint (getArg (a, 3, 0.0f));
 
-        auto low = readLaneStateSuffix (ctx, "svf", lane, "low");
-        auto band = readLaneStateSuffix (ctx, "svf", lane, "band");
-        const auto high = x - low - q * band;
-        band += cutoff * high;
-        low += cutoff * band;
-        writeLaneStateSuffix (ctx, "svf", lane, "low", low);
-        writeLaneStateSuffix (ctx, "svf", lane, "band", band);
+        float low, band, high;
+        if (ctx.builtinSlotBase >= 0)
+        {
+            low  = readBuiltinState (ctx, 0);
+            band = readBuiltinState (ctx, 1);
+            high = x - low - q * band;
+            band += cutoff * high;
+            low  += cutoff * band;
+            writeBuiltinState (ctx, 0, low);
+            writeBuiltinState (ctx, 1, band);
+        }
+        else
+        {
+            const auto lane = laneFromArgs (a, 4);
+            low  = readLaneStateSuffix (ctx, "svf", lane, "low");
+            band = readLaneStateSuffix (ctx, "svf", lane, "band");
+            high = x - low - q * band;
+            band += cutoff * high;
+            low  += cutoff * band;
+            writeLaneStateSuffix (ctx, "svf", lane, "low",  low);
+            writeLaneStateSuffix (ctx, "svf", lane, "band", band);
+        }
 
         switch (mode)
         {
@@ -244,27 +366,45 @@ void registerBuiltins (FunctionRegistry& registry)
     registry.builtins["slew"] = [] (EvalContext& ctx, const std::vector<float>& a)
     {
         const auto target = getArg (a, 0);
-        const auto speed = std::max (0.0f, getArg (a, 1));
-        const auto lane = laneFromArgs (a, 2);
+        const auto speed  = std::max (0.0f, getArg (a, 1));
 
-        auto current = readLaneState (ctx, "slew", lane);
-        const auto delta = clampf (target - current, -speed, speed);
-        current += delta;
-        writeLaneState (ctx, "slew", lane, current);
+        float current;
+        if (ctx.builtinSlotBase >= 0)
+        {
+            current  = readBuiltinState (ctx, 0);
+            current += clampf (target - current, -speed, speed);
+            writeBuiltinState (ctx, 0, current);
+        }
+        else
+        {
+            const auto lane = laneFromArgs (a, 2);
+            current  = readLaneState (ctx, "slew", lane);
+            current += clampf (target - current, -speed, speed);
+            writeLaneState (ctx, "slew", lane, current);
+        }
         return current;
     };
 
     registry.builtins["env"] = [] (EvalContext& ctx, const std::vector<float>& a)
     {
-        const auto x = std::abs (getArg (a, 0));
-        const auto attack = clampf (getArg (a, 1), 0.0f, 1.0f);
+        const auto x       = std::abs (getArg (a, 0));
+        const auto attack  = clampf (getArg (a, 1), 0.0f, 1.0f);
         const auto release = clampf (getArg (a, 2), 0.0f, 1.0f);
-        const auto lane = laneFromArgs (a, 3);
 
-        auto y = readLaneState (ctx, "env", lane);
-        const auto coeff = x > y ? attack : release;
-        y += coeff * (x - y);
-        writeLaneState (ctx, "env", lane, y);
+        float y;
+        if (ctx.builtinSlotBase >= 0)
+        {
+            y = readBuiltinState (ctx, 0);
+            y += (x > y ? attack : release) * (x - y);
+            writeBuiltinState (ctx, 0, y);
+        }
+        else
+        {
+            const auto lane = laneFromArgs (a, 3);
+            y = readLaneState (ctx, "env", lane);
+            y += (x > y ? attack : release) * (x - y);
+            writeLaneState (ctx, "env", lane, y);
+        }
         return y;
     };
 
@@ -272,7 +412,7 @@ void registerBuiltins (FunctionRegistry& registry)
     {
         constexpr int kMaxDelaySamples = 96000;
         const auto x = getArg (a, 0);
-        const int samples = std::clamp ((int) std::lrint (getArg (a, 1, 1.0f)), 1, kMaxDelaySamples - 1);
+        const auto samples = clampf (finiteOrZero (getArg (a, 1, 1.0f)), 1.0f, (float) kMaxDelaySamples - 2.0f);
         const int lane = laneFromArgs (a, 2);
 
         if (ctx.delayBuffers == nullptr)
@@ -284,11 +424,17 @@ void registerBuiltins (FunctionRegistry& registry)
 
         auto& wp = (*ctx.delayWritePositions)[lane];
 
-        int rp = wp - samples;
-        if (rp < 0) rp += kMaxDelaySamples;
+        auto readPosition = (float) wp - samples;
+        while (readPosition < 0.0f)
+            readPosition += (float) kMaxDelaySamples;
+        while (readPosition >= (float) kMaxDelaySamples)
+            readPosition -= (float) kMaxDelaySamples;
 
-        const float y = buf[(size_t) rp];
-        buf[(size_t) wp] = x;
+        const auto i0 = (int) std::floor (readPosition);
+        const auto i1 = (i0 + 1) % kMaxDelaySamples;
+        const auto frac = readPosition - (float) i0;
+        const auto y = mixf (buf[(size_t) i0], buf[(size_t) i1], frac);
+        buf[(size_t) wp] = sanitizeAudio (x);
         wp = (wp + 1) % kMaxDelaySamples;
         return y;
     };
@@ -345,12 +491,8 @@ ScriptEngine::CompileResult ScriptEngine::compileAndInstall (const juce::String&
 
 void ScriptEngine::reset (double sampleRate)
 {
-    currentSampleRate = sampleRate;
-    sampleCounter = 0;
-    persistentState.clear();
-    delayBuffers.clear();
-    delayWritePositions.clear();
-    stateResetRequested.store (false);
+    pendingSampleRate.store (sampleRate);
+    stateResetRequested.store (true);
 }
 
 juce::String ScriptEngine::getCurrentSource() const
@@ -371,23 +513,21 @@ std::shared_ptr<const CompiledProgram> ScriptEngine::getProgramSnapshot() const
     return std::atomic_load(&activeProgram);
 }
 
-constexpr size_t kMaxPersistentStateEntries = 128;
+constexpr size_t kMaxPersistentStateEntries = 512;
 constexpr int kMaxInstructionsPerSample = 4096;
 
-void ScriptEngine::enforcePersistentStateLimit()
+void ScriptEngine::enforcePersistentStateLimit (RuntimeState& state)
 {
-    while (persistentState.size() > kMaxPersistentStateEntries)
-        persistentState.erase (persistentState.begin());
+    while (state.persistentState.size() > kMaxPersistentStateEntries)
+        state.persistentState.erase (state.persistentState.begin());
 }
 
 void ScriptEngine::processBlock (juce::AudioBuffer<float>& buffer, std::array<float, 8>& macros)
 {
     if (stateResetRequested.exchange (false))
     {
-        persistentState.clear();
-        delayBuffers.clear();
-        delayWritePositions.clear();
-        sampleCounter = 0;
+        currentSampleRate = pendingSampleRate.load();
+        runtimeState = {};
     }
 
     const auto program = getProgramSnapshot();
@@ -403,28 +543,37 @@ void ScriptEngine::processBlock (juce::AudioBuffer<float>& buffer, std::array<fl
 
     if (program == nullptr)
     {
-        sampleCounter += (uint64_t) numSamples;
+        runtimeState.sampleCounter += (uint64_t) numSamples;
         return;
     }
+
+    if ((int) runtimeState.persistentStateSlots.size() != (int) program->program.stateSlotNames.size())
+        runtimeState.persistentStateSlots.resize (program->program.stateSlotNames.size(), 0.0f);
 
     EvalContext ctx;
     ctx.sr = (float) currentSampleRate;
     ctx.macros = &macros;
-    ctx.persistentState = &persistentState;
-    ctx.delayBuffers = &delayBuffers;
-    ctx.delayWritePositions = &delayWritePositions;
+    ctx.locals.resize ((size_t) std::max (0, program->program.localSlotCount), 0.0f);
+    ctx.stateSlots = &runtimeState.persistentStateSlots;
+    ctx.persistentState = &runtimeState.persistentState;
+    ctx.delayBuffers = &runtimeState.delayBuffers;
+    ctx.delayWritePositions = &runtimeState.delayWritePositions;
     ctx.functionRegistry = &program->program.functionRegistry;
+    ctx.callArgFrames.clear();
+    ctx.callArgDepth = 0;
 
     for (int s = 0; s < numSamples; ++s)
     {
-        ctx.t = (float) sampleCounter / (float) currentSampleRate;
+        ctx.t = (float) runtimeState.sampleCounter / (float) currentSampleRate;
         ctx.inL = numChannels > 0 ? buffer.getSample (0, s) : 0.0f;
         ctx.inR = numChannels > 1 ? buffer.getSample (1, s) : ctx.inL;
         ctx.outL = ctx.inL;
         ctx.outR = ctx.inR;
-        ctx.locals.clear();
+        std::fill (ctx.locals.begin(), ctx.locals.end(), 0.0f);
         ctx.executionAborted = false;
         ctx.returnTriggered = false;
+        ctx.breakTriggered = false;
+        ctx.continueTriggered = false;
         ctx.returnValue = 0.0f;
         ctx.loopDepth = 0;
         ctx.recursionDepth = 0;
@@ -439,16 +588,25 @@ void ScriptEngine::processBlock (juce::AudioBuffer<float>& buffer, std::array<fl
                 break;
         }
 
-        enforcePersistentStateLimit();
+        if (ctx.executionAborted)
+        {
+            ctx.outL = ctx.inL;
+            ctx.outR = ctx.inR;
+        }
+
+        enforcePersistentStateLimit (runtimeState);
+
+        const auto safeOutL = sanitizeAudio (ctx.outL);
+        const auto safeOutR = sanitizeAudio (ctx.outR);
 
         if (numChannels > 0)
-            buffer.setSample (0, s, ctx.outL);
+            buffer.setSample (0, s, safeOutL);
         if (numChannels > 1)
-            buffer.setSample (1, s, ctx.outR);
+            buffer.setSample (1, s, safeOutR);
         for (int ch = 2; ch < numChannels; ++ch)
-            buffer.setSample (ch, s, 0.5f * (ctx.outL + ctx.outR));
+            buffer.setSample (ch, s, 0.5f * (safeOutL + safeOutR));
 
-        ++sampleCounter;
+        ++runtimeState.sampleCounter;
     }
 }
 
@@ -463,95 +621,22 @@ outR = tanh(inR * drive);
 
 juce::StringArray exampleNames()
 {
-    return {
-        "Cross-feedback distortion",
-        "Time-ramp ring modulation",
-        "Low-pass morph",
-        "Wavefold shimmer",
-        "Stereo bit crush drift",
-        "Noisy transient gate",
-        "Rhythmic pulse gate",
-        "Envelope duck tremor"
-    };
+    juce::StringArray names;
+
+    for (const auto& example : embeddedExamples())
+        names.add (example.name);
+
+    return names;
 }
 
 juce::String exampleScript (int index)
 {
-    switch (index)
+    const auto examples = embeddedExamples();
+    if (index >= 0 && index < (int) examples.size())
     {
-        case 0:
-            return R"(# clean until peaks, then smooth saturation
-outL = tanh(inL * 2.7) * 0.7;
-outR = tanh(inR * 2.7) * 0.7;
-)";
-        case 1:
-            return R"(# channels influence each other for unstable stereo color
-xL = tanh(inL * 3.0 + inR * 1.7);
-xR = tanh(inR * 3.0 + inL * 1.7);
-outL = xL * 0.8;
-outR = xR * 0.8;
-)";
-        case 2:
-            return R"(# ring-mod whose modulator frequency keeps evolving with time
-phase = wrap(t * 0.31, 0.0, 1.0);
-mod = sin(6.2831853 * (80.0 + phase * 700.0) * t);
-outL = inL * mod;
-outR = inR * mod;
-)";
-        case 3:
-            return R"(# morph between dry and one-pole filtered signal
-amount = 0.5 + 0.5 * sin(t * 0.2);
-fL = lpf1(inL, 0.08, 0);
-fR = lpf1(inR, 0.08, 1);
-outL = mix(inL, fL, amount);
-outR = mix(inR, fR, amount);
-)";
-        case 4:
-            return R"(# fold + saturation for airy harmonic layers
-preL = inL * 5.0;
-preR = inR * 5.0;
-outL = tanh(fold(preL, -0.7, 0.7)) * 0.8;
-outR = tanh(fold(preR, -0.7, 0.7)) * 0.8;
-)";
-        case 5:
-            return R"(# moving lo-fi texture with independent stereo smoothers
-steps = 8.0 + 7.0 * sin(t * 0.29);
-cL = crush(inL, steps);
-cR = crush(inR, steps + 2.0);
-outL = slew(cL, 0.025, 0);
-outR = slew(cR, 0.020, 1);
-)";
-        case 6:
-            return R"(# emphasize transients with deterministic pseudo-noise texture
-envL = abs(inL);
-envR = abs(inR);
-gL = smoothstep(0.02, 0.25, envL);
-gR = smoothstep(0.02, 0.25, envR);
-n = noise(3.0 + p2 * 20.0) * (0.02 + p1 * 0.25);
-outL = inL + n * gL;
-outR = inR + n * gR;
-)";
-        case 7:
-            return R"(# synced pulse gating with blend control
-freq = 1.0 + p1 * 16.0;
-duty = 0.1 + p2 * 0.8;
-g = pulse(freq, duty);
-mask = gt(g, 0.0);
-outL = mix(inL * 0.15, inL, mask);
-outR = mix(inR * 0.15, inR, mask);
-)";
-        case 8:
-            return R"(# envelope follower ducks a moving tremolo
-envL = env(inL, 0.25, 0.01, 0);
-envR = env(inR, 0.25, 0.01, 1);
-mod = 0.5 + 0.5 * pulse(2.0 + p1 * 8.0, 0.5);
-depthL = clamp((1.0 - envL * (0.7 + p2)), 0.2, 1.0);
-depthR = clamp((1.0 - envR * (0.7 + p2)), 0.2, 1.0);
-outL = inL * mix(depthL, 1.0, mod);
-outR = inR * mix(depthR, 1.0, mod);
-)";
-        default:
-            break;
+        int dataSize = 0;
+        if (const auto* data = AudioScripterExamples::getNamedResource (examples[(size_t) index].resourceName.toRawUTF8(), dataSize))
+            return juce::String::fromUTF8 (data, dataSize);
     }
 
     return defaultScript();
@@ -559,11 +644,10 @@ outR = inR * mix(depthR, 1.0, mod);
 
 juce::String helpText()
 {
-    return juce::String::fromUTF8(R"(
+    return juce::String ("audio_scripter " AUDIO_SCRIPTER_VERSION_STRING "  -  https://krahd.github.io/audio_scripter/\n"
+                         "----------------------------------------------------------------\n")
+           + juce::String::fromUTF8(R"(
         
-audio_scripter 1.1.0  —  https://krahd.github.io/audio_scripter/
-----------------------------------------------------------------
-
 OVERVIEW
 
   The script runs once per audio sample, top to bottom.
@@ -594,7 +678,11 @@ STATE VARIABLES
 OPERATORS
 
   +  -  *  /           arithmetic (/ returns 0 when divisor is 0)
-  -x                   unary minus
+  -x  !x               unary minus / logical NOT
+  <  <=  >  >=  ==  !=  comparison  (result: 1.0 true, 0.0 false)
+  &&  ||               logical AND / OR  (short-circuit)
+  &  |  ^              bitwise AND / OR / XOR
+  <<  >>               bitwise left / right shift
   true  false          boolean literals (1.0 / 0.0)
 
 
@@ -603,12 +691,10 @@ CONTROL FLOW
   if (condition) { ... } else { ... }
   while (condition) { ... }
   for (i = 0; 8) { ... }          i iterates 0, 1 … 7 (legacy step-by-1 form)
-  for (i = 0; lt(i,8); 1) { ... } extended form: condition and step are exprs
+  for (i = 0; i < 8; 1) { ... }   extended form: condition and step are exprs
   break;                           exit the innermost loop immediately
   continue;                        skip to the next iteration of the innermost loop
   fn name(a, b) { return a + b; }
-
-  Note: use gt/lt/ge/le/select for comparisons — < > == are not operators.
 
 
 MATH FUNCTIONS
@@ -670,7 +756,7 @@ DSP / CREATIVE FUNCTIONS
                           mode: 0=low-pass  1=band-pass  2=high-pass
                           id (optional) separates state per lane
 
-  delay(x, samples, id)  delay line — delays x by N samples
+  delay(x, samples, id)  fractional delay line — delays x by N samples
                           samples clamped 1–96000
                           id (optional) separates state per lane
 
@@ -681,10 +767,10 @@ DSP / CREATIVE FUNCTIONS
 
 COMPARISON / LOGIC  (return 1.0 for true, 0.0 for false)
 
-  gt(a, b)        1.0 if a > b
-  lt(a, b)        1.0 if a < b
-  ge(a, b)        1.0 if a >= b
-  le(a, b)        1.0 if a <= b
+  gt(a, b)        1.0 if a > b   (same as a > b)
+  lt(a, b)        1.0 if a < b   (same as a < b)
+  ge(a, b)        1.0 if a >= b  (same as a >= b)
+  le(a, b)        1.0 if a <= b  (same as a <= b)
   select(c, a, b) returns a if c != 0, else b
 
 

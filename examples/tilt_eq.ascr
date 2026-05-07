@@ -1,0 +1,20 @@
+#@p1: Tilt
+#@p2: Focus
+#@p3: Wet
+# p1 = 0.62
+# p2 = 0.45
+# p3 = 0.8
+# Tilt EQ: below center warms/darkens, above center brightens/thins
+# p1 = tilt balance, p2 = crossover focus, p3 = dry/wet
+cut = 0.018 + p2 * 0.16;
+lowL = lpf1(inL, cut, 0);
+lowR = lpf1(inR, cut, 1);
+highL = inL - lowL;
+highR = inR - lowR;
+tilt = (p1 - 0.5) * 2.0;
+lowGain = 1.0 - tilt * 0.55;
+highGain = 1.0 + tilt * 0.75;
+wetL = tanh(lowL * lowGain + highL * highGain);
+wetR = tanh(lowR * lowGain + highR * highGain);
+outL = mix(inL, wetL, p3);
+outR = mix(inR, wetR, p3);

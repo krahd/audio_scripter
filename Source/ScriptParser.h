@@ -10,10 +10,37 @@
 
 namespace scripting
 {
+struct JuceStringHash
+{
+    size_t operator() (const juce::String& s) const noexcept { return (size_t) s.hashCode(); }
+};
+
+template <typename V>
+using StringMap = std::unordered_map<juce::String, V, JuceStringHash>;
+
 struct Expr;
 struct Statement;
 struct FunctionDefStatement;
 struct FunctionRegistry;
+
+enum class VarKind
+{
+    Input,
+    Output,
+    SampleRate,
+    Time,
+    Macro,
+    Local,
+    State,
+    Unknown
+};
+
+struct VarRef
+{
+    VarKind kind { VarKind::Unknown };
+    int slot { -1 };
+    juce::String name;
+};
 
 struct EvalContext
 {
@@ -37,14 +64,21 @@ struct EvalContext
     float t { 0.0f };
 
     std::array<float, kNumMacros>* macros { nullptr };
-    std::map<juce::String, float> locals;
-    std::map<juce::String, float>* persistentState { nullptr };
+    std::vector<float> locals;
+    std::vector<float>* stateSlots { nullptr };
+    StringMap<float>* persistentState { nullptr };
     const FunctionRegistry* functionRegistry { nullptr };
     std::unordered_map<int, std::vector<float>>* delayBuffers { nullptr };
     std::unordered_map<int, int>* delayWritePositions { nullptr };
+    std::vector<std::vector<float>> callArgFrames;
+    int callArgDepth { 0 };
 
-    float getValue (const juce::String&) const;
-    void setValue (const juce::String&, float);
+    // Set by FunctionCallExpr::evaluate before calling a stateful builtin whose
+    // lane arg was a literal at parse time; -1 means "use persistentState map".
+    int builtinSlotBase { -1 };
+
+    float getValue (const VarRef&) const;
+    void setValue (const VarRef&, float);
 };
 
 enum class ValueType
@@ -83,7 +117,11 @@ struct BoolLiteralExpr : Expr
 struct FunctionCallExpr : Expr
 {
     juce::String functionName;
+    juce::String functionNameLower;
     std::vector<std::unique_ptr<Expr>> arguments;
+    // >= 0 when the lane argument is a compile-time literal; index into
+    // EvalContext::stateSlots for this builtin's private state.
+    int preResolvedStateSlotBase { -1 };
 
     float evaluate (EvalContext&) const override;
 };
@@ -118,7 +156,7 @@ struct WhileStatement : Statement
 
 struct ForStatement : Statement
 {
-    juce::String varName;
+    VarRef loopVar;
     std::unique_ptr<Expr> startExpr;
     std::unique_ptr<Expr> conditionExpr;
     std::unique_ptr<Expr> stepExpr;
@@ -131,6 +169,7 @@ struct FunctionDefStatement : Statement
 {
     juce::String name;
     std::vector<juce::String> parameters;
+    std::vector<int> parameterSlots;
     std::unique_ptr<BlockStatement> body;
     void execute (EvalContext&) const override;
 };
@@ -153,7 +192,7 @@ struct ContinueStatement : Statement
 
 struct AssignmentStatement : Statement
 {
-    juce::String variableName;
+    VarRef variable;
     std::unique_ptr<Expr> expression;
     void execute (EvalContext&) const override;
 };
@@ -168,14 +207,16 @@ using BuiltinFunction = std::function<float (EvalContext&, const std::vector<flo
 
 struct FunctionRegistry
 {
-    std::map<juce::String, BuiltinFunction> builtins;
-    std::map<juce::String, FunctionDefStatement*> user;
+    StringMap<BuiltinFunction> builtins;
+    StringMap<FunctionDefStatement*> user;
 };
 
 struct Program
 {
     std::vector<std::unique_ptr<Statement>> statements;
     FunctionRegistry functionRegistry;
+    int localSlotCount { 0 };
+    std::vector<juce::String> stateSlotNames;
 };
 
 struct ParseResult
@@ -201,6 +242,14 @@ private:
     std::unique_ptr<Statement> parseContinue();
     std::unique_ptr<Statement> parseAssignmentOrExpr();
     std::unique_ptr<Expr> parseExpression();
+    std::unique_ptr<Expr> parseLogicalOr();
+    std::unique_ptr<Expr> parseLogicalAnd();
+    std::unique_ptr<Expr> parseBitwiseOr();
+    std::unique_ptr<Expr> parseBitwiseXor();
+    std::unique_ptr<Expr> parseBitwiseAnd();
+    std::unique_ptr<Expr> parseEquality();
+    std::unique_ptr<Expr> parseComparison();
+    std::unique_ptr<Expr> parseShift();
     std::unique_ptr<Expr> parseAddSub();
     std::unique_ptr<Expr> parseMulDiv();
     std::unique_ptr<Expr> parseUnary();
@@ -210,7 +259,17 @@ private:
     Token consume();
     Token peek();
 
+    VarRef resolveVariableRef (const juce::String& name);
+    int getOrCreateLocalSlot (const juce::String& name);
+    int getOrCreateStateSlot (const juce::String& name);
+    int getOrCreateBuiltinStateSlotBase (const juce::String& key, int numSlots);
+    void tryResolveBuiltinStateSlots (FunctionCallExpr& call);
+
     std::unique_ptr<ScriptTokenizer> tokenizer;
     juce::StringArray* errors { nullptr };
+    StringMap<int> localSlots;
+    StringMap<int> stateSlots;
+    StringMap<int> builtinStateSlots;
+    std::vector<juce::String> stateSlotNames;
 };
 } // namespace scripting

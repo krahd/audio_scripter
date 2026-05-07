@@ -56,4 +56,7 @@ private:
     std::array<std::atomic<float>*, 8> macroParamAtoms {};
     std::array<std::atomic<float>, 8> pendingMacroValues {};
     std::atomic<bool> pendingMacroUpdate { false };
+
+public:
+    std::atomic<float> outputPeakLevel { 0.0f };
 };

@@ -7,8 +7,8 @@ repo_root="$(cd "$(dirname "$0")/.." && pwd)"
 echo "Running Release build..."
 bash "$repo_root/scripts/build_release.sh" --config Release
 
-echo "Installing plugin (with backup)..."
-bash "$repo_root/install.sh" -b
+echo "Installing plugin..."
+bash "$repo_root/install.sh"
 
 echo "Attempting to quit Ableton Live (if running)..."
 osascript -e 'tell application "Ableton Live 11 Suite" to quit' >/dev/null 2>&1 || true

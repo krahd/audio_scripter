@@ -1,5 +1,4 @@
 #include "PluginEditor.h"
-#include <algorithm>
 #include <regex>
 #include <fstream>
 #include <sstream>
@@ -10,8 +9,9 @@ static std::string cp1252_to_utf8 (const std::string& in)
     std::string out;
     out.reserve (in.size() * 2);
 
-    for (unsigned char c : in)
+    for (char rawChar : in)
     {
+        const auto c = (unsigned char) rawChar;
         if (c < 0x80)
         {
             out.push_back ((char) c);
@@ -77,8 +77,9 @@ static juce::String loadTextFileFixEncoding (const juce::File& file)
     const std::string raw = ss.str();
 
     // If the raw bytes contain any CP1252-only control codes (0x80..0x9F), try CP1252 -> UTF-8 conversion.
-    for (unsigned char c : raw)
+    for (char rawChar : raw)
     {
+        const auto c = (unsigned char) rawChar;
         if (c >= 0x80 && c <= 0x9F)
             return juce::String (cp1252_to_utf8 (raw));
     }
@@ -132,21 +133,28 @@ static void applyMacroInitialValuesFromText (AudioScripterAudioProcessor& proces
     try
     {
         const std::string s = text.toStdString();
-        std::regex re ("\\bp([1-8])\\s*=\\s*([-+]?(?:\\d+\\.?\\d*|\\.\\d+))");
+        std::regex re ("^\\s*#\\s*p([1-8])\\s*=\\s*([-+]?(?:\\d+\\.?\\d*|\\.\\d+))\\s*$",
+                       std::regex::icase);
         std::smatch m;
-        auto it = s.cbegin();
-        while (std::regex_search (it, s.cend(), m, re))
+        std::stringstream lines (s);
+        std::string line;
+        while (std::getline (lines, line))
         {
+            if (! std::regex_match (line, m, re))
+                continue;
+
             const int idx = m[1].str()[0] - '1';
             double val = 0.0;
             try { val = std::stod (m[2].str()); } catch (...) { val = 0.0; }
-            if (val < 0.0) val = 0.0; if (val > 1.0) val = 1.0;
+            if (val < 0.0)
+                val = 0.0;
+            if (val > 1.0)
+                val = 1.0;
             if (idx >= 0 && idx < 8)
             {
                 if (auto* p = processorRef.getValueTreeState().getParameter (macroParamId (idx)))
                     p->setValueNotifyingHost ((float) val);
             }
-            it = m.suffix().first;
         }
     }
     catch (...) {}
@@ -185,13 +193,13 @@ static std::array<juce::String, 8> parseMacroLabelsFromText (const juce::String&
 
 
 AudioScripterAudioProcessorEditor::AudioScripterAudioProcessorEditor (AudioScripterAudioProcessor& p)
-    : AudioProcessorEditor (&p), processor (p)
+    : AudioProcessorEditor (&p), audioProcessor (p)
 {
     // allow host/standalone window to be resizable when supported
     setResizable (true, true);
     setResizeLimits (600, 350, 3840, 2400);
 
-    titleLabel.setText ("audio_scripter 1.1.0", juce::dontSendNotification);
+    titleLabel.setText ("audio_scripter " AUDIO_SCRIPTER_VERSION_STRING, juce::dontSendNotification);
     titleLabel.setJustificationType (juce::Justification::centredLeft);
     titleLabel.setFont (juce::FontOptions (18.0f, juce::Font::bold));
     addAndMakeVisible (titleLabel);
@@ -224,15 +232,15 @@ AudioScripterAudioProcessorEditor::AudioScripterAudioProcessorEditor (AudioScrip
     // Script-aware colour scheme with full token coverage from ScriptCodeTokeniser.
     scriptEditor->setColourScheme (codeTokeniser->getDefaultColourScheme());
     // initial content (fix encoding when loading from disk)
-    scriptEditor->loadContent (processor.getScript());
+    scriptEditor->loadContent (audioProcessor.getScript());
     addAndMakeVisible (*scriptEditor);
 
     outputPanel.setMultiLine (true);
     outputPanel.setReadOnly (true);
+    outputPanel.setScrollbarsShown (true);
     outputPanel.setColour (juce::TextEditor::backgroundColourId, juce::Colours::black.withAlpha (0.45f));
-    outputPanel.setColour (juce::TextEditor::textColourId, juce::Colours::lightgreen);
-    outputPanel.setText ("Ready. p1..p8 macros are available in scripts and can be automated from your DAW.");
     addAndMakeVisible (outputPanel);
+    appendToLog ("Ready. p1..p8 macros are available in scripts and can be automated from your DAW.");
 
     applyButton.addListener (this);
     saveButton.addListener (this);
@@ -248,38 +256,11 @@ AudioScripterAudioProcessorEditor::AudioScripterAudioProcessorEditor (AudioScrip
     examplesBox.addListener (this);
     examplesBox.addItem ("Select example...", 1);
 
-#if defined(EXAMPLES_DIR)
-    {
-        juce::File examplesDir (EXAMPLES_DIR);
-        if (examplesDir.isDirectory())
-        {
-            juce::Array<juce::File> files;
-            examplesDir.findChildFiles (files, juce::File::findFiles, false, "*.ascr");
-            if (files.size() > 1)
-            {
-                std::sort(files.getRawDataPointer(), files.getRawDataPointer() + files.size(),
-                          [] (const juce::File& a, const juce::File& b) { return a.getFileName().compareNatural (b.getFileName()) < 0; });
-            }
-            for (int i = 0; i < files.size(); ++i)
-            {
-                examplesBox.addItem (files[i].getFileNameWithoutExtension(), i + 2);
-                exampleFiles.push_back (files[i]);
-            }
-        }
-        else
-        {
-            const auto names = scripting::exampleNames();
-            for (int i = 0; i < names.size(); ++i)
-                examplesBox.addItem (names[i], i + 2);
-        }
-    }
-#else
     {
         const auto names = scripting::exampleNames();
         for (int i = 0; i < names.size(); ++i)
             examplesBox.addItem (names[i], i + 2);
     }
-#endif
 
     addAndMakeVisible (examplesBox);
     // make "Select example..." visible by default
@@ -300,7 +281,7 @@ AudioScripterAudioProcessorEditor::AudioScripterAudioProcessorEditor (AudioScrip
 
         macroAttachments.push_back (
             std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (
-                processor.getValueTreeState(), macroParamId (i), slider));
+                audioProcessor.getValueTreeState(), macroParamId (i), slider));
     }
 
     helpPanel = std::make_unique<juce::CodeEditorComponent> (helpDocument, codeTokeniser.get());
@@ -316,7 +297,14 @@ AudioScripterAudioProcessorEditor::AudioScripterAudioProcessorEditor (AudioScrip
     helpDocument.replaceAllContent (fixCp1252Mojibake (scripting::helpText()));
     addAndMakeVisible (*helpPanel);
 
+    levelLabel.setFont (juce::FontOptions (12.0f));
+    levelLabel.setJustificationType (juce::Justification::centred);
+    levelLabel.setColour (juce::Label::backgroundColourId, juce::Colour (0xff1a2028));
+    levelLabel.setColour (juce::Label::textColourId, juce::Colour (0xff4ec9b0));
+    addAndMakeVisible (levelLabel);
+
     applyScriptMetadata();
+    startTimerHz (15);
 
     // setSize must come after all child components are created so that the
     // first resized() call can lay them out correctly.
@@ -325,12 +313,22 @@ AudioScripterAudioProcessorEditor::AudioScripterAudioProcessorEditor (AudioScrip
 
 AudioScripterAudioProcessorEditor::~AudioScripterAudioProcessorEditor()
 {
+    stopTimer();
     applyButton.removeListener (this);
     saveButton.removeListener (this);
     loadButton.removeListener (this);
     aboutButton.removeListener (this);
     defaultsButton.removeListener (this);
     examplesBox.removeListener (this);
+}
+
+void AudioScripterAudioProcessorEditor::timerCallback()
+{
+    const float peak = audioProcessor.outputPeakLevel.exchange (0.0f);
+    const bool active = peak > 0.001f;
+    levelLabel.setText (active ? juce::String (peak, 3) : "---", juce::dontSendNotification);
+    levelLabel.setColour (juce::Label::textColourId,
+                          active ? juce::Colour (0xff4ec9b0) : juce::Colour (0xff3a4858));
 }
 
 void AudioScripterAudioProcessorEditor::paint (juce::Graphics& g)
@@ -349,8 +347,8 @@ void AudioScripterAudioProcessorEditor::resized()
     auto area = getLocalBounds().reduced (10);
     auto titleRow = area.removeFromTop (30);
     websiteButton.setBounds (titleRow.removeFromRight (240));
-    titleRow.removeFromRight (8);
-    aboutButton.setBounds (titleRow.removeFromRight (60));
+    aboutButton.setBounds (titleRow.removeFromRight (46));
+    levelLabel.setBounds (titleRow.removeFromRight (54));
     titleLabel.setBounds (titleRow);
 
     auto controls = area.removeFromTop (30);
@@ -417,41 +415,22 @@ void AudioScripterAudioProcessorEditor::comboBoxChanged (juce::ComboBox* box)
     if (idx < 0)
         return;
 
-    // If we have example files discovered at runtime, load the file contents.
-    if (idx < (int) exampleFiles.size())
-    {
-        const auto file = exampleFiles[(size_t) idx];
-        if (file.existsAsFile())
-        {
-            scriptEditor->loadContent (loadTextFileFixEncoding (file));
-            applyScriptMetadata();
-        }
-        return;
-    }
-
-    // Fallback to built-in indexed examples (if available).
-    const auto fallbackIdx = idx - (int) exampleFiles.size();
-    if (fallbackIdx >= 0)
-    {
-        scriptEditor->loadContent (scripting::exampleScript (fallbackIdx));
-        applyScriptMetadata();
-    }
+    scriptEditor->loadContent (scripting::exampleScript (idx));
+    applyScript();
 }
 
 void AudioScripterAudioProcessorEditor::applyScript()
 {
     applyScriptMetadata();
-    const auto result = processor.setScript (scriptEditor->getDocument().getAllContent());
+    const auto result = audioProcessor.setScript (scriptEditor->getDocument().getAllContent());
 
     if (result.ok)
     {
-        outputPanel.setColour (juce::TextEditor::textColourId, juce::Colours::lightgreen);
-        outputPanel.setText ("Compiled successfully.");
+        appendToLog ("Compiled successfully.");
         return;
     }
 
-    outputPanel.setColour (juce::TextEditor::textColourId, juce::Colours::orange);
-    outputPanel.setText (result.errors.joinIntoString ("\n"));
+    appendToLog (result.errors.joinIntoString ("\n"), juce::Colours::orange);
 }
 
 void AudioScripterAudioProcessorEditor::applyScriptMetadata()
@@ -460,7 +439,7 @@ void AudioScripterAudioProcessorEditor::applyScriptMetadata()
         return;
 
     const auto text = scriptEditor->getDocument().getAllContent();
-    applyMacroInitialValuesFromText (processor, text);
+    applyMacroInitialValuesFromText (audioProcessor, text);
     applyMacroLabelsFromText (text);
 }
 
@@ -489,15 +468,9 @@ void AudioScripterAudioProcessorEditor::saveScriptToFile()
             juce::MessageManager::callAsync ([this, ok, file]
             {
                 if (ok)
-                {
-                    outputPanel.setColour (juce::TextEditor::textColourId, juce::Colours::lightgreen);
-                    outputPanel.setText ("Saved script to: " + file.getFullPathName());
-                }
+                    appendToLog ("Saved: " + file.getFullPathName());
                 else
-                {
-                    outputPanel.setColour (juce::TextEditor::textColourId, juce::Colours::red);
-                    outputPanel.setText ("Could not save script.");
-                }
+                    appendToLog ("Could not save script.", juce::Colours::red);
             });
         });
 }
@@ -522,10 +495,19 @@ void AudioScripterAudioProcessorEditor::loadScriptFromFile()
                 if (scriptEditor)
                     scriptEditor->loadContent (text);
                 applyScriptMetadata();
-                outputPanel.setColour (juce::TextEditor::textColourId, juce::Colours::lightgreen);
-                outputPanel.setText ("Loaded: " + file.getFullPathName());
+                appendToLog ("Loaded: " + file.getFullPathName());
             });
         });
+}
+
+void AudioScripterAudioProcessorEditor::appendToLog (const juce::String& message, juce::Colour colour)
+{
+    const auto ts = juce::Time::getCurrentTime().formatted ("%H:%M:%S");
+    const auto existing = outputPanel.getText();
+    outputPanel.setColour (juce::TextEditor::textColourId, colour);
+    outputPanel.setText (existing.isEmpty() ? "[" + ts + "] " + message
+                                            : existing + "\n[" + ts + "] " + message);
+    outputPanel.moveCaretToEnd();
 }
 
 void AudioScripterAudioProcessorEditor::showAboutBox()
@@ -534,30 +516,37 @@ void AudioScripterAudioProcessorEditor::showAboutBox()
     {
         AboutContent()
         {
-            title.setText ("audio_scripter 1.1.0", juce::dontSendNotification);
+            title.setText ("audio_scripter " AUDIO_SCRIPTER_VERSION_STRING, juce::dontSendNotification);
             title.setFont (juce::FontOptions (17.0f, juce::Font::bold));
             title.setJustificationType (juce::Justification::centred);
             title.setColour (juce::Label::textColourId, juce::Colour (0xff4ec9b0));
             addAndMakeVisible (title);
 
-            tagline.setText ("Real-time scriptable audio effect plugin\nVST3  \xc2\xb7  AU  \xc2\xb7  Standalone",
-                             juce::dontSendNotification);
+            tagline.setText ("Real-time scriptable audio effects plugin", juce::dontSendNotification);
             tagline.setFont (juce::FontOptions (12.5f));
             tagline.setJustificationType (juce::Justification::centred);
             tagline.setColour (juce::Label::textColourId, juce::Colour (0xff8a9aaa));
             addAndMakeVisible (tagline);
 
+            const auto dot = juce::String::charToString (0x00B7);
+            formats.setText ("VST3  " + dot + "  AU  " + dot + "  Standalone", juce::dontSendNotification);
+            formats.setFont (juce::FontOptions (11.5f));
+            formats.setJustificationType (juce::Justification::centred);
+            formats.setColour (juce::Label::textColourId, juce::Colour (0xff8a9aaa));
+            addAndMakeVisible (formats);
+
             link.setColour (juce::HyperlinkButton::textColourId, juce::Colour (0xff4ec9b0));
             link.setFont (juce::FontOptions (12.0f), false, juce::Justification::centred);
             addAndMakeVisible (link);
 
-            copyright.setText ("MIT License  \xc2\xa9  2026 krahd", juce::dontSendNotification);
+            const auto copy = juce::String::charToString (0x00A9);
+            copyright.setText ("MIT License  " + copy + "  2026 krahd", juce::dontSendNotification);
             copyright.setFont (juce::FontOptions (11.0f));
             copyright.setJustificationType (juce::Justification::centred);
             copyright.setColour (juce::Label::textColourId, juce::Colour (0xff525e68));
             addAndMakeVisible (copyright);
 
-            setSize (320, 138);
+            setSize (320, 148);
         }
 
         void paint (juce::Graphics& g) override
@@ -569,7 +558,9 @@ void AudioScripterAudioProcessorEditor::showAboutBox()
         {
             auto b = getLocalBounds().reduced (16, 12);
             title.setBounds (b.removeFromTop (26));
-            tagline.setBounds (b.removeFromTop (34));
+            b.removeFromTop (2);
+            tagline.setBounds (b.removeFromTop (18));
+            formats.setBounds (b.removeFromTop (16));
             b.removeFromTop (6);
             link.setBounds (b.removeFromTop (22));
             b.removeFromTop (4);
@@ -578,6 +569,7 @@ void AudioScripterAudioProcessorEditor::showAboutBox()
 
         juce::Label title;
         juce::Label tagline;
+        juce::Label formats;
         juce::HyperlinkButton link {
             "krahd.github.io/audio_scripter",
             juce::URL ("https://krahd.github.io/audio_scripter/")
