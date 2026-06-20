@@ -212,3 +212,7 @@ The engine is now fast enough for all current examples. If heavier user scripts 
 
 - The render report's synthetic "program" input has step transients at every beat (every 0.5 s). This produces 2 Hz "click" artifacts in offline renders of envelope-driven effects — those are real responses to a discontinuous test signal, not an engine bug.
 - `runtimeState.sampleCounter` is a `uint64_t` cast to `float` for `ctx.t`. After ~6 minutes of continuous playback (sampleCounter > 2^24 at 48 kHz) `t` loses sub-2-sample precision; high-frequency oscillators using `t` (e.g., the formant_robot carrier) will alias slightly. Not the current problem, but worth fixing if we ever care about long-running session quality.
+
+---
+
+Last updated: 2026-05-07 00:15
