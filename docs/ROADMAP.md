@@ -89,16 +89,22 @@ release.
 
 ## 2. v0.1 plan (phased)
 
-### Phase 0 — Hygiene (prerequisite, ~1–2 days)
+### Phase 0 — Hygiene (prerequisite) — ✅ mostly done (2026-06-20)
 Goal: a clean, single-source-of-truth baseline that CI actually gates.
-- [ ] **Single-source the version.** Derive everywhere from
-  `CMakeLists.txt` `project(VERSION)` → `Constants.h`; update README and
-  `LANGUAGE_SPEC.md`. (D1)
-- [ ] **Repair `STATUS.md`** into one current snapshot; move historical notes to
-  `docs/CHANGELOG.md`. (D2)
-- [ ] **Fix the `audio_scripter_parser_tests` crash** so `ctest` passes and CI
-  blocks on it. (C3)
-- [ ] Tag a clean baseline (e.g. `v0.0.13`) before feature work.
+- [x] **Single-source the version.** `CMakeLists.txt` `project(VERSION)` is
+  canonical and passed via `-DAUDIO_SCRIPTER_VERSION_STRING`; `Constants.h` is a
+  documented fallback; README, `LANGUAGE_SPEC.md`, and `docs/index.html` synced
+  to 0.0.13. (D1)
+- [x] **Repair `STATUS.md`** into one current snapshot; backfill
+  `docs/CHANGELOG.md` for 0.0.10–0.0.13. (D2)
+- [x] **Investigate the `audio_scripter_parser_tests` crash.** Not a code defect:
+  the `std::bad_alloc` came from a **stale `build/` dir bound to the old source
+  path** (wrong compiled-in `EXAMPLES_DIR`). A clean configure builds and passes
+  `ctest` (1/1). (C3)
+- [x] **CI gates the tests.** `.github/workflows/ci.yml` already configures a
+  fresh `build/` on a clean runner, builds `audio_scripter_parser_tests`, and
+  runs `ctest` on every push/PR — so the stale-path failure cannot recur in CI.
+- [ ] Tag a clean baseline (`v0.0.13`) before feature work (user/release action).
 
 ### Phase 1 — Credibility floor: RT-safety + correctness
 Goal: make the central design claim true and *provable*. This is also Table-1

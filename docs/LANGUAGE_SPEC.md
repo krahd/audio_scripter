@@ -1,6 +1,6 @@
 # audio_scripter — script language manual
 
-v0.0.9 · reflects the implemented parser and runtime
+v0.0.13 · reflects the implemented parser and runtime
 
 ---
 
