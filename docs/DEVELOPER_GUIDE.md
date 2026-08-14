@@ -7,6 +7,8 @@ This guide documents the current implementation at a level useful for contributo
 
 The extended pre-redesign implementation/tutorial guide remains available for provenance on branch `archive/pre-language-redesign-2026-08-14`.
 
+The canonical private research workspace is `krahd/research/projects/audio_scripter/`.
+
 ## 1. Architecture
 
 The repository currently contains three layers that are being made conceptually independent:
@@ -82,7 +84,7 @@ Required credibility work:
 
 The current elapsed-time path derives `t` using floating-point seconds. The project has identified precision degradation in long-running sessions. This must be corrected before `t` is treated as a robust long-session oscillator/timebase primitive.
 
-A future language design may also distinguish sample time, physical time, host musical time and tempo-relative time rather than exposing a single scalar `t`.
+A future language design may distinguish sample time, physical time, host musical time and tempo-relative time rather than exposing a single scalar `t`.
 
 ## 7. DSP builtins
 
@@ -105,19 +107,11 @@ Do not build new language semantics around the 96,000-sample implementation cons
 
 ## 9. Parser and evaluator
 
-The baseline parser supports:
-
-- assignment;
-- arithmetic/comparison/logical/bitwise expressions;
-- `if` / `else`;
-- `while`;
-- legacy and extended `for` forms;
-- `break` / `continue`;
-- top-level user-defined functions and `return`.
+The baseline parser supports assignment, arithmetic/comparison/logical/bitwise expressions, `if` / `else`, `while`, legacy and extended `for` forms, `break` / `continue`, and top-level user-defined functions with `return`.
 
 The current implementation is a tree-walking evaluator with optimisation work for variable/state lookup and builtin state resolution. Performance is adequate for the existing example corpus but is not itself the research contribution.
 
-Do not add bytecode/JIT infrastructure until it is required by the research prototype or measured runtime limits. Language semantics should not be chosen to simplify the current evaluator.
+Do not add bytecode/JIT infrastructure until required by the research prototype or measured runtime limits. Language semantics should not be chosen to simplify the current evaluator.
 
 ## 10. Tests
 
@@ -140,21 +134,9 @@ Important missing coverage:
 
 ## 11. Building
 
-Standard release helper:
-
 ```bash
 ./scripts/build_release.sh --config Release --package
-```
-
-With tests:
-
-```bash
 ./scripts/build_release.sh --config Release --tests
-```
-
-With a local JUCE checkout:
-
-```bash
 ./scripts/build_release.sh --juce-path /path/to/JUCE --config Release --package
 ```
 
@@ -180,33 +162,36 @@ See `CMakeLists.txt` and build scripts for the current authoritative build confi
 - history/feedback syntax;
 - channel abstractions;
 - MIDI/event syntax;
+- pattern/behaviour syntax;
+- declarative target/constraint syntax;
 - new control-flow forms;
 - standard-library effect abstractions.
 
-A feature being useful or conventional is not sufficient. During this phase, user-visible language changes should identify the representational problem they solve and their strongest prior-art counterexample.
+A feature being useful or conventional is not sufficient. **Blocker 1 is open:** a proposed semantic addition should help test whether the language can achieve a materially different primitive decomposition of effect-making, not merely cleaner articulation.
 
 ## 13. Public/private research boundary
 
-This public repository should contain:
+This public repository should contain implementation facts, source/tests/examples, conservative verified project context, and reviewed reproducibility material.
 
-- implementation facts;
-- source/tests/examples;
-- conservative, verified project context;
-- reproducibility material once reviewed.
+Unpublished novelty arguments, detailed competitive comparisons, semantic-kernel alternatives, paper drafts, internal research logs, artwork concepts and funding strategy belong in:
 
-Unpublished novelty arguments, detailed competitive comparisons, paper drafts, internal research logs, artwork concepts and funding strategy belong in the private `krahd/academic-writing` workspace.
+`krahd/research/projects/audio_scripter/`
+
+A future distinct manuscript belongs under `krahd/research/academic-writing/my_papers_<year>/` and should link back to the project dossier.
 
 ## 14. Contribution workflow
 
 Before a substantial language change:
 
 1. check [`STATUS.md`](../STATUS.md) and [`ROADMAP.md`](ROADMAP.md);
-2. identify the benchmark/research problem motivating the change;
-3. check the closest precedent systems;
-4. keep the host adapter from becoming the semantic specification;
-5. add tests for the intended semantic behaviour;
-6. update the language manual only when the baseline implementation actually changes;
-7. update `krahd/tom-work-admin` when project state, research direction, dependencies or major gates change, as required by `WORK-ADMIN.md`.
+2. when available, check the current private research status in `krahd/research/projects/audio_scripter/`;
+3. identify the musical/semantic problem motivating the change;
+4. check the closest precedent systems using their strongest idiomatic abstractions;
+5. ask whether the proposal changes primitive ontology or only notation;
+6. keep the host adapter from becoming the semantic specification;
+7. add tests for the intended semantic behaviour;
+8. update the language manual only when the baseline implementation actually changes;
+9. update `krahd/tom-work-admin` when project state, research direction, dependencies or major gates change, as required by `WORK-ADMIN.md`.
 
 ## 15. Provenance
 
