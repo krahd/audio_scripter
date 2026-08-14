@@ -50,7 +50,9 @@ The work is considered a viable research programme provided that the next stage 
 
 The current theoretical centre under investigation is the relation between **semantic distance** and **articulatory distance** in an audio programming language: the distance between what a musician intends, the concepts the language makes available, and the concrete expressions required to invoke them.
 
-This framing and all unpublished novelty analysis are maintained privately in `krahd/academic-writing`.
+An initial and second-pass state-of-the-art audit have been completed privately. They substantially narrow the contribution boundary: related methods and music-programming applications already have strong precedents, so the project must establish a specific representational problem in programmable audio transformations rather than relying on a generic accessibility or notation argument.
+
+Detailed comparative analysis and unpublished novelty arguments remain in the private `krahd/academic-writing` workspace.
 
 ## Active work
 
@@ -58,11 +60,13 @@ This framing and all unpublished novelty analysis are maintained privately in `k
 
 Before substantial new language implementation:
 
-1. complete a systematic comparison of relevant programmable-audio systems and research languages;
+1. close-read the strongest system and theoretical precedents identified by the audits;
 2. construct a representative effect/challenge corpus;
-3. analyse the implementation concepts each system forces the author to manage;
-4. identify candidate reductions in semantic/articulatory distance;
-5. test those reductions through small semantic prototypes before fixing syntax.
+3. analyse the implementation concepts each system forces the author to manage, using each system's strongest idiomatic abstractions;
+4. distinguish language/notation effects from editor/runtime/host effects;
+5. identify candidate reductions in semantic/articulatory distance and their trade-offs;
+6. test those reductions through small semantic prototypes before fixing syntax;
+7. require evidence of inspectability, composability, and non-trivial artistic utility before treating the design-space gap as established.
 
 Only after this gate should the new language kernel be committed.
 
@@ -94,11 +98,11 @@ Unpublished material belongs in the private `krahd/academic-writing` repository,
 
 ## Next actions
 
-1. Finish and audit the private state-of-the-art map.
-2. Define the effect/challenge benchmark corpus.
-3. Compare representative tasks across the strongest relevant systems.
-4. Derive a candidate host-independent semantic kernel.
-5. Prototype the kernel minimally and use it in sustained musical practice.
+1. Close-read the mandatory theoretical and programmable-audio precedents already identified privately.
+2. Freeze the first diagnostic subset of the effect/challenge benchmark corpus.
+3. Implement representative tasks across the strongest comparison systems.
+4. Derive candidate host-independent semantic kernels only from demonstrated representational burdens.
+5. Prototype promising kernels minimally and use them in sustained musical practice.
 6. Revisit syntax only after the semantic model survives these tests.
 7. In parallel, repair the baseline runtime's real-time-safety gaps.
 
