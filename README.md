@@ -1,37 +1,78 @@
-# audio_scripter 0.0.13
+# audio_scripter
 
-audio_scripter is a JUCE-based, real-time scriptable audio effect plugin (VST3, AU, Standalone).
+**Experimental research prototype · current implementation: 0.0.13**
 
-Write DSP scripts that run **once per audio sample**, manipulate `inL`/`inR`, and write `outL`/`outR` — that's it. No compilation step, no DAW restart: press **Apply** and the new script takes effect immediately.
+audio_scripter is an experimental system for designing and testing small languages for programmable audio effects. The repository currently contains a JUCE host application/plugin (VST3, AU, Standalone), a per-sample scripting language, an interpreter/runtime, tests, and a library of example effects.
+
+The project is **in active development**. The current language is a research baseline, not a stable API: syntax, semantics, host integration, file formats, and project name may change substantially. It should not yet be treated as production software or as a backwards-compatible plugin platform.
 
 **Website:** [krahd.github.io/audio_scripter](https://krahd.github.io/audio_scripter/)
 
-## Highlights
+## Current baseline
 
-- Per-sample script language: arithmetic, user functions, persistent state, and loop controls (`break` / `continue`).
-- Lock-free script swap — zero-copy hot reload at runtime.
-- 8 DAW-automatable macro knobs `p1..p8` accessible from every script.
-- Extended DSP primitives: `lpf1`, `hp1`, `bp1`, `svf`, `env`, `slew`, `delay`, `sat`.
-- Cross-format: VST3, AU, Standalone (macOS); Windows VST3 & Standalone via CI.
+The implemented 0.0.13 language uses a direct per-sample model: scripts read `inL`/`inR`, compute, and write `outL`/`outR`. It currently provides:
+
+- arithmetic, comparisons, logical and bitwise operators;
+- user-defined functions and bounded control flow;
+- persistent `state_` variables;
+- eight DAW-automatable macro parameters (`p1`…`p8`);
+- DSP primitives including filters, envelopes, slew limiting, delays, saturation, shaping, and noise;
+- atomic publication of newly compiled program snapshots while audio processing continues;
+- VST3, AU, and Standalone JUCE targets;
+- a curated example corpus in `examples/`.
+
+See [the language manual](docs/LANGUAGE_SPEC.md) for the language exactly as it is implemented today.
+
+## Research and design direction
+
+The immediate research task is **language design**, deliberately separated from the design of the VST/AU interface. The plugin is one host for the language, not the definition of the language.
+
+Current work is focused on:
+
+1. establishing a careful prior-art and comparison baseline across programmable audio and music languages;
+2. analysing the conceptual cost of expressing representative audio effects in existing systems;
+3. defining a host-independent semantic kernel before committing to new syntax;
+4. investigating learnability, expressive range, and the distance between musical intention and program expression;
+5. retaining the plugin/runtime as an experimental host and evaluation environment.
+
+No novelty claim is made here for programmable plugins, per-sample DSP scripting, hot reload, or live DSP modification. Those capabilities have substantial precedents. Public research notes are in [docs/RESEARCH.md](docs/RESEARCH.md); unpublished analysis and paper development are maintained separately.
+
+The pre-redesign project state is preserved for provenance on branch [`archive/pre-language-redesign-2026-08-14`](https://github.com/krahd/audio_scripter/tree/archive/pre-language-redesign-2026-08-14).
+
+## Development status and known limitations
+
+The current implementation is useful as an experimental baseline, but important engineering work remains:
+
+- `delay()` still performs allocation on first use of a lane in the audio path;
+- some fallback state lookup paths perform string/hash work per sample;
+- the current `t` representation loses precision in long sessions;
+- the language is stereo-oriented and exposes implementation-level state lane identifiers;
+- there are parser/behavioural tests, but no complete golden-audio suite or audio-thread allocation guard yet;
+- plugin behaviour has not been validated exhaustively across supported hosts.
+
+These limitations are tracked in [STATUS.md](STATUS.md) and [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## Documentation
 
 | Document | Contents |
 | --- | --- |
-| [Language manual](docs/LANGUAGE_SPEC.md) | Full script language tutorial, reference, and examples |
-| [Developer guide](docs/DEVELOPER_GUIDE.md) | Runtime architecture, DSP primitive notes, and build/release details |
+| [Language manual](docs/LANGUAGE_SPEC.md) | Exact reference for the implemented 0.0.13 language |
+| [Project status](STATUS.md) | Current development state, limitations, and active work |
+| [Roadmap](docs/ROADMAP.md) | Research-first development sequence |
+| [Research note](docs/RESEARCH.md) | Public, conservative research context and verified precedents |
+| [Developer guide](docs/DEVELOPER_GUIDE.md) | Runtime architecture, DSP primitives, build/release details |
 | [Changelog](docs/CHANGELOG.md) | Release history |
 
 ## Build requirements
 
 - CMake 3.22+
 - A C++20 compiler (Clang or recent GCC / MSVC on Windows)
-- JUCE — fetched automatically via CMake FetchContent, or supply a local checkout
+- JUCE, fetched automatically with CMake FetchContent or supplied locally
 
-## Quick build & package
+## Build and test
 
 ```bash
-# Build release and package binaries (VST3 / AU / Standalone)
+# Build release and package binaries
 ./scripts/build_release.sh --config Release --package
 
 # Build and run validator + parser tests
@@ -41,64 +82,22 @@ Write DSP scripts that run **once per audio sample**, manipulate `inL`/`inR`, an
 ./scripts/build_release.sh --juce-path /path/to/JUCE --config Release --package
 ```
 
-## Install plugin (macOS)
+Additional validation:
 
 ```bash
-# User install with timestamped backup of any existing bundle
-./install.sh -b
-
-# System-wide install (requires root)
-sudo ./install.sh --system -b
-
-# Convenience: build, install, quit Ableton, open test project
-./scripts/build_and_open_als.sh
-```
-
-## VS Code
-
-`.vscode/tasks.json` includes a `Build Release + Install VST3` task.
-
-## Tests & validation
-
-```bash
-# Validate example scripts against the parser
 python3 tools/validate_scripts.py
-
-# Run parser unit tests (after CMake configure)
 cmake --build build --target audio_scripter_parser_tests
 ctest --test-dir build --output-on-failure
 ```
 
-## CI and releases
-
-A CI workflow (`.github/workflows/ci.yml`) runs the script validator and parser tests on every push and PR.
-
-A release workflow (`.github/workflows/release.yml`) builds macOS and Windows artifacts and publishes a GitHub Release when you push a `v*` tag:
-
-```bash
-git tag v0.0.13
-git push origin v0.0.13
-```
-
 ## Examples
 
-Scripts live in `examples/`. Load any `.ascr` file from the plugin's **Load** button or pick one from the examples dropdown.
-
-The curated library is split between practical studio effects and stranger scripting-first patches:
-
-- Standard palette: delay, ping-pong delay, diffused reverb, chorus, stereo doubler, tremolo, autopan, phaser, autowah, compressor, transient shaper, soft clip, EQ, filters, stereo width.
-- Creative palette: formant robot, ring modulator, rhythmic pulse gate, sample-and-hold, sample-rate reducer, wavefold shimmer, harmonic exciter, SVF morph sweeper.
-
-Authoring tips:
-
-- Smooth discontinuities with `slew` or `lpf1` to avoid clicks.
-- Use fractional `delay()` times for modulated chorus/flange/doubler motion; the engine interpolates between samples.
-- Stage wet/dry with `mix(dry, wet, pN)` so the effect is always controllable.
+Scripts in `examples/` include conventional studio effects and less conventional signal-processing sketches. They are primarily a regression, comparison, and language-design corpus; they should not be read as a statement that the current syntax is final.
 
 ## License
 
-This project is released under the [MIT License](LICENSE).
+MIT. See [LICENSE](LICENSE).
 
 ## Contributing
 
-Open issues and PRs against `main`. CI will run the validator and parser tests automatically.
+Issues and pull requests are welcome. Because the language is being reconsidered at the semantic level, substantial syntax/API additions should be discussed before implementation.
