@@ -1,120 +1,179 @@
 # Agent Instructions — audio_scripter
 
-These instructions apply to all AI coding agents working in this repository
-(GitHub Copilot, OpenAI Codex, Claude, and compatible tools).
+These instructions apply to AI coding agents working in this repository.
 
----
+## Repository status
 
-## Repository overview
+`audio_scripter` is an **experimental research prototype**, currently at implementation baseline `0.0.13`. The current `.ascr` language is a preserved research baseline, not a stable API or the final language design.
 
-`audio_scripter` is a JUCE-based audio plugin (VST3 + AU) that interprets a
-domain-specific scripting language (`.ascr`) at audio-thread rate. The engine
-is intentionally minimal and allocation-free on the hot path.
+The project is now research-first: do not accumulate user-visible language features simply because they are useful or conventional. The semantic design is being reconsidered independently of the VST/AU interface.
 
-Key directories:
+The pre-redesign state is preserved on branch:
+
+`archive/pre-language-redesign-2026-08-14`
+
+Do not develop on or rewrite that provenance branch.
+
+## Architecture boundary
+
+Treat these as distinct layers even where the current baseline still couples them:
+
+1. **language** — semantics and notation;
+2. **runtime** — evaluation, state, time, memory, DSP resources, safety;
+3. **host adapter** — JUCE/VST3/AU/Standalone integration, parameters, transport, persistence;
+4. **authoring interface** — editor, diagnostics and feedback.
+
+The plugin is one host for the language, not the language specification. New semantics must not be justified solely by what is convenient for JUCE/VST.
+
+## Repository layout
 
 | Path | Purpose |
 |---|---|
-| `Source/` | Plugin C++ source (engine, parser, tokeniser, editor, processor) |
-| `examples/` | Bundled `.ascr` effect scripts |
-| `tests/` | CTest-based C++ unit tests |
-| `tests_python/` | Python validation tests for example scripts |
-| `tools/` | Offline render / benchmark tool (`RenderEffectReport.cpp`) |
-| `docs/` | Language spec, developer guide, changelog |
-| `scripts/` | Build and packaging shell scripts |
+| `Source/` | Plugin C++ source, parser, runtime, editor and processor |
+| `examples/` | Bundled `.ascr` baseline effect scripts |
+| `tests/` | CTest-based C++ parser/runtime tests |
+| `tests_python/` | Python-side validation tests where applicable |
+| `tools/` | Offline render / benchmark utilities |
+| `docs/` | Public language, developer, research and roadmap documentation |
+| `scripts/` | Build and packaging scripts |
 
----
+## Build baseline
 
-## Build
+`CMakeLists.txt` is authoritative for build requirements. At baseline 0.0.13 it specifies:
+
+- CMake 3.22+;
+- C++20;
+- JUCE 8.0.8 through FetchContent unless a local JUCE checkout is supplied.
+
+Typical commands:
 
 ```bash
-# Release build (VST3 + AU)
+# Release build
 bash scripts/build_release.sh --config Release
 
 # Debug build + install
 bash scripts/build_release.sh --config Debug --install
 
-# Run tests
+# Run configured tests
 ctest --test-dir build --output-on-failure
 ```
 
-CMake 3.24+ and the JUCE 7 FetchContent dependency are required. The build
-produces artefacts under `build/audio_scripter_artefacts/`.
+Build artefacts are generated under `build/`; do not commit them.
 
----
+## Real-time safety — current truth
+
+The audio path **is not yet proven allocation-free or lock-free**.
+
+Known issues include:
+
+- first use of a `delay()` lane can allocate/initialise its buffer on the audio thread;
+- fallback stateful-builtin paths can perform string construction/hash lookup during processing;
+- an automated audio-thread allocation guard is not yet present;
+- use of atomic `shared_ptr` program publication does not itself establish a portable lock-free guarantee.
+
+Therefore:
+
+- do not describe the current engine as allocation-free, lock-free, or fully real-time-safe;
+- avoid introducing any new allocation, blocking, I/O, logging, string construction, container growth, or mutex acquisition into per-sample/audio-callback paths;
+- prefer compile-time/off-audio-thread resource census and allocation;
+- add tests/measurement before strengthening any real-time-safety claim.
+
+Repairing these issues without prejudging future language semantics is appropriate work.
 
 ## Code conventions
 
-- C++17; no exceptions; no RTTI in audio-thread code.
-- The audio thread must be **allocation-free**. Never call `new`, `malloc`,
-  `std::vector::push_back` that may reallocate, or any JUCE allocating API
-  (e.g. `juce::String` construction from literals) inside
-  `ScriptEngine::processBlock` or any function it calls per-sample.
-- Prefer `float` arithmetic; avoid `double` in the engine hot path.
-- Use `juce::String` only outside the audio thread (editor, parser setup).
-- New built-in functions belong in `ScriptEngine.cpp` alongside existing ones
-  (`lpf1`, `bp1`, `svf`, `env`, `slew`, `delay`, …).
-- Parser changes belong in `ScriptParser.cpp / .h`; AST node types are defined
-  there.
-- Keep `Source/Constants.h` in sync when bumping the plugin version.
+- C++20.
+- Keep exceptions/RTTI out of hot audio paths unless the existing build/configuration explicitly requires otherwise.
+- Avoid allocation or potentially allocating JUCE/STL operations in `ScriptEngine::processBlock` and functions called per sample.
+- Use `juce::String` outside audio processing unless a path has been explicitly audited.
+- Parser implementation belongs in `ScriptParser.*` / `ScriptTokenizer.*`.
+- Runtime/builtin implementation belongs in `ScriptEngine.*`.
+- Keep `Source/Constants.h` and CMake project versioning consistent when changing releases.
 
----
+Do not add a new builtin merely because it is convenient. During the language-research phase, a user-visible semantic addition needs a documented representational problem and prior-art check.
+
+## Language-change rule
+
+Before adding or changing user-visible syntax/semantics:
+
+1. read `STATUS.md`, `docs/ROADMAP.md`, and `docs/RESEARCH.md`;
+2. identify the research/benchmark problem the change addresses;
+3. check the strongest relevant precedent system rather than assuming the feature is absent elsewhere;
+4. distinguish semantic change from editor/runtime/host convenience;
+5. implement the smallest prototype necessary to test the hypothesis;
+6. add behavioural tests;
+7. update `docs/LANGUAGE_SPEC.md` only when the implementation actually changes.
+
+Large feature work such as arrays/buffers, new state syntax, parameters, history/feedback constructs, musical units, channel abstractions, MIDI/event syntax or new control-flow forms is **not pre-authorised by the old roadmap**.
 
 ## Testing
 
-- Run the CTest suite after any engine or parser change.
-- After adding or modifying `.ascr` examples, run:
-  ```bash
-  python3 tests_python/test_validate_scripts.py
-  ```
-- For performance-sensitive changes, build the render/benchmark tool and check
-  realtime factors:
-  ```bash
-  cmake --build build --target audio_scripter_render_report
-  ./build/audio_scripter_render_report
-  ```
-  All example effects should achieve a realtime factor ≥ 1.0 at 48 kHz /
-  256-sample blocks.
+After engine/parser changes:
 
----
+```bash
+cmake --build build --target audio_scripter_parser_tests
+ctest --test-dir build --output-on-failure
+```
+
+After adding/modifying examples, use the repository's current validation tooling, including:
+
+```bash
+python3 tools/validate_scripts.py
+```
+
+For performance-sensitive work, the offline render/report target is available:
+
+```bash
+cmake --build build --target audio_scripter_render_report
+./build/audio_scripter_render_report
+```
+
+Do not turn a historical benchmark threshold into a correctness claim. Record the exact test configuration and results when performance matters.
+
+## Documentation boundary
+
+This repository is public.
+
+Public material may include:
+
+- verified implementation facts;
+- source/tests/examples;
+- conservative, source-checked research context;
+- reviewed reproducibility material.
+
+Do **not** add unpublished novelty arguments, detailed competitive judgements, paper drafts, internal theoretical notes, unreviewed artwork concepts, funding strategy, or private reflective-practice logs. Those belong in the private `krahd/academic-writing` workspace.
 
 ## STATUS.md — mandatory upkeep
 
-**`STATUS.md` must be kept up to date at all times.**
+`STATUS.md` must remain current after any material change. Record:
 
-After every non-trivial change (bug fix, optimisation, new feature, refactor,
-or noteworthy investigation finding), update `STATUS.md` as part of the same
-commit or work session. The file must reflect:
+- current focus and research/technical gate;
+- verified root causes of open technical issues;
+- changes already on `main`;
+- altered next actions;
+- material implementation/research state that affects other repositories.
 
-- The **current focus** — what is actively being worked on.
-- The **root cause** of any open bug, once identified.
-- A summary of **changes already on `main`** (add a row to the table).
-- Any new or changed **files of interest** or **diagnostic outputs**.
-- The **last updated** timestamp at the top of the file, in the format:
+Use factual wording and distinguish implemented behaviour, measured evidence, and hypotheses.
 
-  ```
-  Last updated: YYYY-MM-DD HH:MM
-  ```
+## Cross-repository administration
 
-  Use the local wall-clock time (24-hour). Never leave the timestamp stale.
+`krahd/tom-work-admin` is canonical for global/cross-domain status. Follow `WORK-ADMIN.md` and update `tom-work-admin` in the same work session whenever lifecycle, research direction, major validation state, publication relationship, name/status, or next cross-domain action changes.
 
-Agents must not close a task or mark work complete without first verifying that
-`STATUS.md` accurately describes the current state of the project.
+Private paper/theory work belongs in:
 
----
+`krahd/academic-writing/my_papers_2026/2026 - Programmable Audio Language/`
 
 ## Pull-request / commit hygiene
 
-- Commits should be atomic and focused on a single concern.
-- Commit messages: imperative mood, ≤ 72 characters on the subject line.
-- Do not commit build artefacts, `.DS_Store`, or files under `build/`.
-- Do not force-push to `main`.
-
----
+- Keep commits focused.
+- Use concise imperative commit subjects.
+- Do not commit generated build artefacts or `.DS_Store`.
+- Do not force-push `main`.
+- Do not rewrite the frozen provenance branch.
 
 ## Safety rules
 
-- Do not modify or delete files under `build/` — that directory is generated.
-- Do not run `rm -rf` without explicit user confirmation.
-- Do not push to remote branches without explicit user instruction.
-- When in doubt about a destructive action, ask before proceeding.
+- Treat `build/` as generated output.
+- Do not run destructive recursive deletion without explicit user instruction/confirmation where required.
+- Do not delete provenance/history to make the current narrative cleaner.
+- Preserve failed language designs and benchmark evidence when they have research value.
