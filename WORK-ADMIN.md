@@ -4,11 +4,13 @@ Global repository registry, cross-domain status, and the master calendar are mai
 
 This public repository remains canonical for **audio_scripter** implementation, releases, examples, tests, exact implemented language documentation, and reviewed public technical/research state.
 
-The private research and first-paper workspace is:
+The canonical private research workspace is:
 
-`krahd/academic-writing/my_papers_2026/2026 - Programmable Audio Language/`
+`krahd/research/projects/audio_scripter/`
 
-It is canonical for unpublished theory, detailed prior-art/novelty analysis, benchmark methodology, manuscript development, private reflective/artistic-research material, funding strategy, and graduate-research planning.
+It owns unpublished theory, language-ontology/design work, detailed prior-art/novelty analysis, benchmark methodology, private reflective/artistic-research material, first-paper development before a distinct manuscript workspace is warranted, funding strategy, and graduate-research planning.
+
+When a paper becomes a distinct publication object, its manuscript belongs under `krahd/research/academic-writing/my_papers_<year>/` and should link to the project dossier rather than duplicate it.
 
 Submission-specific packages belong in `krahd/professional-opportunities`; grant/funding application packages belong in `krahd/grant-applications`.
 
@@ -37,24 +39,24 @@ Update `krahd/tom-work-admin` in the same work session when any of the following
 - verified, conservative public documentation;
 - implementation limitations and engineering status.
 
-### Keep in private `academic-writing`
+### Keep in private `krahd/research/projects/audio_scripter/`
 
 - novelty claims under investigation;
 - detailed system comparisons/evaluative judgements;
-- theoretical development;
-- paper arguments and drafts;
+- theoretical and ontological development;
+- language-design alternatives and failed semantic experiments;
 - raw/sensitive reflective-practice logs;
 - unpublished artwork concepts when disclosure is undesirable;
-- venue/funding/PhD strategy.
+- paper/funding/PhD strategy before those become separate canonical domain objects.
 
-Do not copy private material into this public repository merely for administrative completeness. `tom-work-admin` should store the concise cross-repository relationship and point to the canonical sources.
+Do not copy private material into this public repository merely for administrative completeness. `tom-work-admin` stores the concise cross-repository relationship and points to canonical sources.
 
 ## Completion check
 
 Before considering a material project-state change complete, verify that:
 
 1. this repository reflects implementation/public-state changes;
-2. the private academic-writing workspace reflects unpublished research/paper changes;
+2. `krahd/research/projects/audio_scripter/` reflects unpublished research/language-design changes;
 3. `krahd/tom-work-admin` reflects resulting global status, relationships, naming state, gates, dates, and next actions;
-4. related submission/grant repositories are updated only when their domains are actually affected;
+4. related manuscript/submission/grant repositories are updated only when their domains are actually affected;
 5. no stale cross-domain status or date remains in `tom-work-admin`.
