@@ -1,174 +1,149 @@
-# audio_scripter — Roadmap to v0.1 ("Musician-led authoring")
+# audio_scripter — Development Roadmap
 
-Status: draft · target line: **v0.1.0** · supersedes ad-hoc notes in `STATUS.md`
+Status: active research/development · updated 2026-08-14
 
-This roadmap turns audio_scripter from a working 0.0.x scriptable plugin into a
-**v0.1 release that can carry a peer-reviewed paper**. The paper's contribution
-is *coding as an expressive musical gesture*: the musician authoring and
-hot-swapping their own audio effects, in-flow, inside the DAW they already play
-in (see [RESEARCH.md](RESEARCH.md)). Every item below is justified by whether it
-serves that thesis — **low floor** (learnability), **expressive ceiling**
-(artistic range), and **systems credibility** (the gesture must be safe and
-instantaneous to be musical).
+This roadmap supersedes the earlier feature-driven v0.1 plan. The existing 0.0.13 implementation remains a useful experimental baseline, but new language features are **not** to be added merely because they increase conventional DSP capability. The next phase is to determine what the language should mean before expanding what it can express syntactically.
 
-Scope is deliberately **focused** (not a full overhaul). Items marked
-*[deferred → v0.2]* are intentionally out of scope for the first paper-ready
-release.
+The pre-redesign repository state is preserved at `archive/pre-language-redesign-2026-08-14`.
 
----
+## 1. Design constraints
 
-## 1. Audit summary (2026-06, against `main` @ 0.0.12)
+### Separate language from host
 
-### What is solid
-- **Lock-free hot-swap** is correct: programs published as atomic
-  `shared_ptr` snapshots; reset / sample-rate as atomic requests consumed on the
-  audio thread (`ScriptEngine::compileAndInstall` / `processBlock`,
-  `Source/ScriptEngine.cpp`). This is the technical enabler of the whole thesis.
-- **Slot-resolution optimisations** are real and well-reasoned: `VarRef`
-  (kind + slot), pre-resolved builtin state lanes, per-depth arg-frame pool
-  (`Source/ScriptParser.h`, `Source/ScriptParser.cpp`).
-- Build / CI / release scaffolding (CMake + FetchContent JUCE 8.0.8, GitHub
-  Actions) is appropriate for the project size.
+The language must not be defined by the current VST/AU user interface. Treat the system as three layers:
 
-### Findings, by severity
+1. **Language** — host-independent meanings and expressions.
+2. **Runtime** — audio/control/event execution, state, memory, scheduling, compilation/evaluation, safety.
+3. **Host adapter** — VST3/AU/Standalone/other integration, parameter exposure, transport, persistence, UI.
 
-**Critical — contradicts a stated claim**
-- **C1. `delay()` allocates on the audio thread.** First use of any lane runs
-  `(*ctx.delayBuffers)[lane]` (map insert) and `buf.assign(96000, 0.0f)`
-  (~384 KB) inside the audio callback (`Source/ScriptEngine.cpp` `delay`
-  builtin). The non-literal-lane fallback in every stateful builtin also builds
-  `juce::String` keys and hashes them per sample (`readLaneState` /
-  `writeLaneState`). The "real-time safe" claim must be made true and *proven*.
-- **C2. `t` precision decays.** `ctx.t = sampleCounter / sr` as `float` loses
-  sub-sample precision after ~6 min; time-based oscillators alias in long
-  sessions.
-- **C3. Parser tests do not run.** `audio_scripter_parser_tests` crashes with
-  `std::bad_alloc` before output (per `STATUS.md`). The 733-line test file is
-  effectively dead — there is no passing automated correctness gate.
+The current JUCE plugin is one adapter and one experimental interface.
 
-**Language ceiling (expressiveness)**
-- **L1. No arrays / tables / buffers.** Everything is a scalar float. Wavetables,
-  FIR, granular, convolution, multi-tap structures are impossible without abusing
-  hidden `delay` lanes. This is the biggest expressive limit and the weakest
-  point versus Faust / Gen~ / Cmajor.
-- **L2. Manual integer "lane" state is fragile.** `reverb.ascr` hand-assigns
-  lanes 0–13. Error-prone and unteachable — the worst ergonomic wart for a
-  *musician-author*.
-- **L3. Fixed 8 macro params, all normalised 0..1, no names/ranges/units in the
-  language.** Every script re-derives `0.05 + p1*0.45`. No first-class parameter
-  declaration.
-- **L4. No MIDI / no instrument notion.** `processBlock` does
-  `ignoreUnused(midi)`. *[deferred → v0.2]* — relevant to the live-coding-
-  instrument angle, not to v0.1's effect-authoring thesis.
+### Research before feature accumulation
 
-**Interface (authoring experience + evaluation surface)**
-- **I1. No visual/audio feedback** beyond a single peak number
-  (`PluginEditor::timerCallback`). No scope, spectrum, or in/out comparison.
-- **I2. Errors go to a text log, not the editor gutter.** No inline markers,
-  autocomplete, or inline builtin docs.
-- **I3.** Examples are read-only embedded; no patch browser; knobs show no
-  ranges/units.
+Named state, parameter declarations, arrays/buffers, MIDI, multichannel support, higher-level temporal constructs, and other features may eventually be appropriate. None is presumed to belong in the language until the comparison and benchmark work shows what conceptual problem it solves.
 
-**Performance**
-- **P1. AST tree-walking** with `std::function` builtins and per-node virtual
-  dispatch. Adequate today (all 24 examples ≥ 1.5× realtime). Bytecode VM is the
-  next step and a measurable systems result *[deferred → v0.2]*.
+### Public claims remain conservative
 
-**Docs / process**
-- **D1. Version drift:** README & `LANGUAGE_SPEC.md` say `0.0.9`;
-  `Constants.h` / CMake say `0.0.12`; CHANGELOG tops out at `0.0.9`.
-- **D2. `STATUS.md` is corrupted** — two concatenated snapshots with duplicate
-  "Last updated" footers.
-- **D3. Validation is regex-based** (`tools/validate_scripts.py`): it lints text,
-  it does not verify DSP behaviour. No golden-audio / numerical tests; no
-  allocation-on-audio-thread guard.
-- **D4. No related-work or evaluation material** — addressed by the rewritten
-  `RESEARCH.md`.
+Programmable audio plugins, per-sample scripting, dynamic recompilation, in-DAW authoring, live coding, and stateful DSP languages all have substantial precedents. This repository does not claim novelty for those capabilities.
 
----
+## 2. Phase A — Freeze and provenance
 
-## 2. v0.1 plan (phased)
+- [x] Freeze pre-redesign state on `archive/pre-language-redesign-2026-08-14` at `d98e3379c9f2b1e21cf8527c31384987917eed58`.
+- [x] Reframe `main` as an experimental research prototype.
+- [x] Make the public/private research boundary explicit.
+- [ ] Keep 0.0.13 runnable while language research proceeds.
 
-### Phase 0 — Hygiene (prerequisite) — ✅ mostly done (2026-06-20)
-Goal: a clean, single-source-of-truth baseline that CI actually gates.
-- [x] **Single-source the version.** `CMakeLists.txt` `project(VERSION)` is
-  canonical and passed via `-DAUDIO_SCRIPTER_VERSION_STRING`; `Constants.h` is a
-  documented fallback; README, `LANGUAGE_SPEC.md`, and `docs/index.html` synced
-  to 0.0.13. (D1)
-- [x] **Repair `STATUS.md`** into one current snapshot; backfill
-  `docs/CHANGELOG.md` for 0.0.10–0.0.13. (D2)
-- [x] **Investigate the `audio_scripter_parser_tests` crash.** Not a code defect:
-  the `std::bad_alloc` came from a **stale `build/` dir bound to the old source
-  path** (wrong compiled-in `EXAMPLES_DIR`). A clean configure builds and passes
-  `ctest` (1/1). (C3)
-- [x] **CI gates the tests.** `.github/workflows/ci.yml` already configures a
-  fresh `build/` on a clean runner, builds `audio_scripter_parser_tests`, and
-  runs `ctest` on every push/PR — so the stale-path failure cannot recur in CI.
-- [ ] Tag a clean baseline (`v0.0.13`) before feature work (user/release action).
+## 3. Phase B — State-of-the-art and benchmark gate
 
-### Phase 1 — Credibility floor: RT-safety + correctness
-Goal: make the central design claim true and *provable*. This is also Table-1
-material for the systems half of the paper.
-- [ ] **Parse-time lane/buffer census.** During `compileAndInstall`, enumerate
-  every delay lane and stateful-builtin instance and **pre-allocate all buffers
-  off the audio thread**. The audio path must do zero allocation and zero string
-  hashing. Remove (or assert-unreachable) the `juce::String`-keyed fallback. (C1, L2 groundwork)
-- [ ] **Allocation guard test.** Harness that overrides global `new`/`delete` and
-  asserts zero heap activity across `processBlock` for every example. (D3)
-- [ ] **Golden-audio numerical tests.** Render each example to a fixed buffer with
-  a deterministic input; compare against committed references within tolerance.
-  Run in CI. (D3)
-- [ ] **Fix `t` precision** — phase-accumulate or use `double` for time. (C2)
+No substantial language redesign should be merged before this phase produces a defensible result.
 
-### Phase 2 — Authoring experience (the thesis core)
-Goal: lower the floor and raise the ceiling for a *musician* writing an effect
-live. This is what the paper studies and demonstrates.
+### Prior-art map
 
-Language (`Source/ScriptParser.*`, `Source/ScriptEngine.*`, `LANGUAGE_SPEC.md`):
-- [ ] **Named state** — `state.foo` (or keep `state_` as alias) replacing raw
-  prefixes, and **auto-managed filter/delay instances** so a musician never hand-
-  numbers a lane. Backed by the Phase-1 census. (L2)
-- [ ] **`param` declarations** — `param drive (0..10, "Drive", default 3)` that
-  bind to automatable host parameters, show name/range/unit on the knob, and lift
-  the hard 8-param cap to a configurable N. Keep `# @pN` / `# pN =` as legacy. (L3)
-- [ ] **Arrays / buffers** — fixed-size, bounds-checked (`buf[i]`), enabling
-  wavetables and short FIRs. Allocated at compile time (Phase-1 discipline). (L1)
+Study the strongest relevant systems at the level of semantics and authoring model, not merely feature checklists. The comparison set includes, at minimum:
 
-Interface (`Source/PluginEditor.*`):
-- [ ] **Inline error markers** in the editor gutter with messages on the offending
-  line (parser already reports line numbers). (I2)
-- [ ] **Real-time scope + in/out compare** panel — minimal but present; the core
-  immediate-feedback surface for the "gesture" and for study screenshots. (I1)
-- [ ] *[stretch]* inline builtin help on hover / autocomplete. (I2)
-- [ ] *[stretch]* editable patch browser. (I3)
+- REAPER JSFX / EEL2;
+- Kronos / Kronos VST;
+- Blue Cat Plug'n Script;
+- Faust;
+- Gen / GenExpr;
+- Cmajor;
+- mimium;
+- ChucK and SuperCollider/JIT approaches where relevant;
+- other systems revealed by the continuing literature review.
 
-### Phase 3 — Paper artifacts
-- [ ] Finalise `RESEARCH.md` positioning + evaluation design (musician study +
-  system benchmarks). (D4)
-- [ ] Reproducibility: a CI job / script that regenerates every figure and the
-  golden-audio set from a clean checkout.
-- [ ] Expand the example library with 2–3 patches that *require* arrays (wavetable
-  synth-fx, short convolution/FIR) to demonstrate the new ceiling.
+Detailed unpublished analysis is kept in the private academic-writing repository.
 
-### Deferred to v0.2 (explicitly out of v0.1 scope)
-- MIDI / note input / sample-accurate control (live-coding-instrument angle). (L4)
-- Bytecode VM + SIMD/block processing + Faust/Cmajor throughput comparison. (P1)
-- Multichannel beyond L/R.
+### Effect/challenge corpus
 
----
+Construct a corpus that spans:
 
-## 3. Definition of done for v0.1
-1. Audio path is allocation-free and lock-free, verified by an automated guard.
-2. `ctest` is green in CI and gates merges (parser + golden-audio + allocation).
-3. A musician can declare named parameters, use named state, and index a buffer —
-   no manual lane integers anywhere in the shipped examples.
-4. The editor shows inline errors and live signal feedback.
-5. `RESEARCH.md` states the contribution, related work, and a concrete evaluation
-   protocol; figures are reproducible from a clean checkout.
+- simple conventional effects;
+- stateful and feedback effects;
+- tempo/time-dependent processing;
+- channel-structural transformations;
+- effects requiring histories/buffers;
+- signal-dependent temporal operations;
+- deliberately unusual effects that expose the limits of fixed commercial plugins.
 
-## 4. Sequencing notes
-- Phases 0–1 are unconditional and unblock everything; do them first.
-- Phase-2 language work depends on the Phase-1 census (it is what makes named
-  state and arrays allocation-safe).
-- Keep each phase shippable: tag `v0.1.0-alpha.N` at phase boundaries so there is
-  always a citable, runnable artifact.
+The purpose is not to demonstrate that other programmable systems are computationally incapable. It is to expose the concepts and implementation machinery required to express each intention.
+
+### Analysis dimensions
+
+For each system/task pair, record at least:
+
+- concepts the programmer must represent explicitly;
+- state/memory management burden;
+- sample/time/tempo conversion burden;
+- channel-routing burden;
+- parameter and host-mapping burden;
+- feedback representation;
+- temporal-history representation;
+- amount and locality of boilerplate;
+- hidden dependencies and error modes;
+- expression size only as a secondary proxy, never as the sole measure of complexity.
+
+## 4. Phase C — Semantic kernel
+
+Derive the smallest host-independent set of concepts that materially reduces the observed representational burden.
+
+Candidate areas to investigate include:
+
+- signals as first-class values;
+- musical/physical quantities and units;
+- time and tempo as explicit semantic objects;
+- scoped state rather than manually numbered implementation lanes;
+- direct representation of signal history;
+- explicit but concise feedback;
+- channel-polymorphic or structural operations;
+- composition mechanisms that preserve readability;
+- parameters defined semantically and mapped to hosts separately.
+
+These are hypotheses, not commitments.
+
+### Exit criterion
+
+Proceed only if the candidate kernel can make a meaningful set of musically relevant tasks more direct without becoming a disguised library over a conventional general-purpose DSP language.
+
+## 5. Phase D — Minimal prototype and reflective use
+
+- Implement only enough of the candidate kernel to test the central claims.
+- Keep syntax deliberately provisional.
+- Use the language repeatedly in actual music/sound work.
+- Maintain a design log of intention → expression → friction → redesign → musical consequence.
+- Preserve failed designs as research evidence.
+- Compare equivalent tasks with selected precedent systems.
+
+External participants are not required for formative design, but claims about learnability beyond the designer require external validation.
+
+## 6. Phase E — Engineering credibility
+
+The existing runtime has known issues that must be fixed before strong real-time-safety claims:
+
+- pre-allocate delay/state resources off the audio thread;
+- remove per-sample dynamic string/hash fallback paths;
+- add an audio-thread allocation guard;
+- add deterministic golden-audio tests;
+- fix long-session time precision;
+- verify behaviour across representative hosts and plugin formats.
+
+These tasks can proceed in parallel when they do not constrain language semantics.
+
+## 7. Phase F — Publication/artistic release
+
+A paper-ready milestone should include:
+
+- a verified state-of-the-art boundary;
+- an explicit theoretical framework;
+- the benchmark/challenge corpus;
+- a language design derived from observed representational problems;
+- a runnable reference implementation;
+- comparative examples;
+- evidence from sustained artistic use;
+- appropriately scoped external evaluation where claims require it;
+- reproducible technical measurements for implementation claims.
+
+Publication strategy, artwork development, funding strategy, and unpublished novelty arguments are maintained privately.
+
+## 8. Naming
+
+`audio_scripter` is a working name, not a settled identity. Naming review should occur after the semantic centre is clearer and must include project-name, software, domain, app-store, and trademark searches before any rename.
