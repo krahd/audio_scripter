@@ -84,18 +84,20 @@ def test_three_reference_processes_accept_same_lifecycle_contract():
         assert process.identity in ("f", "d", "r")
 
 
-def test_each_study_renders_finite_nonzero_audio_and_trace():
+def test_each_study_eventually_renders_finite_nonzero_audio_and_trace():
+    # P2 deliberately begins with a silent-evolution section, so render far enough
+    # to cross the first formal boundary rather than requiring immediate sound.
     for study in studies_mod.studies():
         fast = pg.Study(
             study.name,
-            duration_beats=4,
+            duration_beats=20,
             bpm=study.bpm,
             source=study.source,
             chain=study.chain,
             sample_rate=2000,
             beats_per_bar=study.beats_per_bar,
         )
-        result = pg.render(fast, trace_every_beats=1.0)
+        result = pg.render(fast, trace_every_beats=2.0)
         assert result.samples
         assert result.trace
         assert all(x == x and abs(x) != float("inf") for x in result.samples)
