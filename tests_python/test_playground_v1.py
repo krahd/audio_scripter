@@ -7,6 +7,7 @@ TOOLS = Path(__file__).resolve().parents[1] / "tools"
 for module_name in (
     "lifecycle_spike",
     "playground_v0",
+    "playground_sources",
     "playground_v1",
     "render_playground_v1",
 ):
