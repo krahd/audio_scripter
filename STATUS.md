@@ -1,105 +1,92 @@
 # audio_scripter — Project Status
 
-Last updated: 2026-08-14 · implementation baseline 0.0.13
+Last updated: 2026-08-25 · implementation baseline 0.0.13
 
 ## Status
 
-**Active experimental research/development project.**
+**Active experimental research/development project. Blocker 1 remains OPEN.**
 
-The current 0.0.13 implementation is treated as a **baseline for language-design research**, not as the target language specification. The pre-redesign state is frozen at:
+The current 0.0.13 implementation remains a baseline for language-design research, not the target language specification. The pre-redesign state is frozen at:
 
 - branch: `archive/pre-language-redesign-2026-08-14`
 - commit: `d98e3379c9f2b1e21cf8527c31384987917eed58`
 
-The project name `audio_scripter` is provisional and will be reconsidered against existing names and the eventual conceptual identity of the language.
+The project name `audio_scripter` remains provisional.
 
-## Project purpose
+## Current semantic experiment
 
-The project investigates whether a language for programmable audio transformations can combine a low initial conceptual burden with a high expressive ceiling, while making musically meaningful relations more direct to formulate than they are in the current baseline.
+Branch `research/lifecycle-spike` contains the first executable semantic spike authorised by the private research programme.
 
-The language and plugin interface are explicitly separate design problems:
+It does **not** change the `.ascr` grammar, parser, JUCE plugin semantics or C++ runtime.
 
-- **language:** semantics, syntax, temporal/state abstractions, parameters, channels, composition, learnability, expressive cost;
-- **runtime:** compilation/evaluation, state, memory, scheduling, safety, audio/control/event interfaces;
-- **host adapter:** VST3/AU/Standalone/other host integration, parameter mapping, transport, UI, persistence.
+The experiment tests whether a persistent stateful transformation benefits from explicit, independently variable lifecycle policies for:
 
-The existing JUCE plugin remains an experimental host. VST-specific constraints should not define the language semantics.
+- input participation;
+- internal-state evolution;
+- output participation;
+- history accumulation;
+- observation evolution.
 
-## Current implementation baseline
+Files:
 
-The existing language is a small imperative, per-sample scripting language. It currently supports:
+- `tools/lifecycle_spike.py`
+- `tests_python/test_lifecycle_spike.py`
 
-- `inL`/`inR` → `outL`/`outR` per-sample execution;
-- scalar floating-point values;
-- arithmetic, comparison, logical, and bitwise operators;
-- `if`, `while`, two `for` forms, `break`, and `continue`;
-- user-defined functions;
-- persistent variables through the `state_` prefix;
-- eight normalised macro parameters, `p1`…`p8`;
-- built-in filters, delay, envelope, slew, saturation, shaping, oscillation/noise helpers;
-- atomic publication of compiled program snapshots;
-- 24 embedded example effects.
+Current reference cases:
 
-See `docs/LANGUAGE_SPEC.md` for the exact implemented baseline.
+- normal operation;
+- tail: block new input while state continues evolving and remains audible;
+- freeze: block input and freeze state;
+- silent evolution: continue input/state while suppressing output;
+- history-only accumulation;
+- resume without recreating transformation identity.
+
+Local validation on 25 August 2026: **5 behavioural tests passed** after correcting the Python dynamic-import test harness.
+
+This validates internal consistency of the spike only. It is **not evidence of semantic novelty or superiority**.
 
 ## Research gate
 
-**Blocker 1: OPEN.**
+The general viability of audio/music programming-language research is already established. The active gate is whether this project can produce a language whose semantic model and primitive decomposition are materially distinct and useful rather than a cleaner restatement of existing DSP, patcher, live-coding, FRP or functional-signal abstractions.
 
-The general scholarly viability of audio/music programming-language research is not the question. The active gate is whether this project can produce a language whose **semantic model and primitive decomposition are materially distinct and useful**, rather than a cleaner or shorter restatement of existing DSP languages and patchers.
+Current private research has rejected/demoted several broader candidate cores:
 
-Current private research is examining alternative programming paradigms and effect ontologies, not only textual DSP syntax. Semantic and articulatory distance are being used as design pressures as well as later evaluation concepts.
+- declarative/constraint as primary core: rejected;
+- behaviour/pattern as primary core: demoted;
+- generic first-class relation as novelty carrier: rejected after FRP/higher-order DSP comparison.
 
-Detailed unpublished comparative analysis remains in the private workspace:
+The current provisional survivor is a **persistent transformation + participation/lifecycle contract**. Strong precedents already exist for every component separately, including SuperCollider NodeProxy/JITLib and Max/MSP routing/muting. The experiment must determine whether the decomposition itself provides useful semantic leverage.
 
-`krahd/research/projects/audio_scripter/`
-
-No substantial new public language semantics should be committed until a candidate design survives this gate.
-
-## Active research work
-
-Before substantial language implementation:
-
-1. compare different primitive ontologies across programmable DSP, patchers, live-coding/pattern systems and declarative approaches;
-2. construct a small diagnostic effect/transformation challenge corpus;
-3. analyse each relevant precedent using its strongest idiomatic abstraction;
-4. design multiple competing semantic kernels before settling syntax;
-5. test whether candidates change solution structure rather than line count;
-6. require inspectability, composability and non-trivial artistic utility;
-7. search for counterexamples/precedents after each design iteration.
-
-### Engineering credibility work
-
-Independent of language redesign, the existing baseline still has concrete technical issues:
-
-- `delay()` allocates on first use of a lane on the audio path;
-- non-literal stateful-builtin fallbacks can perform per-sample string/hash work;
-- `t` is represented in a way that loses precision during long sessions;
-- there is no allocation-guard test for the audio callback;
-- there is no comprehensive golden-audio numerical regression suite;
-- cross-host/plugin-format validation remains incomplete.
-
-These are implementation facts, not research contributions, but must be resolved before strong real-time-safety claims are made.
-
-## Public/private boundary
-
-This public repository contains implementation, examples, tests, verified technical documentation and conservative public research context.
-
-Unpublished research material belongs in:
+Detailed unpublished analysis remains in:
 
 `krahd/research/projects/audio_scripter/`
 
-That includes detailed prior-art matrices/evaluative judgements, language-ontology experiments, novelty analysis, paper strategy, raw reflective-practice material, unpublished artwork concepts and funding/graduate-research planning.
+## Current implementation baseline
 
-When a paper becomes a distinct publication object, its manuscript belongs under `krahd/research/academic-writing/my_papers_<year>/` and should link to the project dossier rather than duplicate it.
+The existing `.ascr` language remains the small imperative per-sample baseline documented in `docs/LANGUAGE_SPEC.md`. No public language-semantic change is implied by the lifecycle spike.
 
-## Next actions
+Independent baseline engineering issues remain:
 
-1. Design three competing semantic kernels in the private research workspace.
-2. Define a small diagnostic challenge set that stresses time, history, feedback, relation, condition and changing behaviour/topology.
-3. Compare those challenges against the strongest relevant existing systems.
-4. Prototype only the minimum machinery needed to test surviving semantic hypotheses.
-5. Use surviving candidates in sustained sonic/artistic practice.
-6. In parallel, repair baseline runtime real-time-safety/test gaps where those repairs do not prejudge future semantics.
+- `delay()` can allocate on first lane use on the audio path;
+- fallback stateful-builtin paths can perform per-sample string/hash work;
+- `t` precision degrades in long sessions;
+- no automated audio-thread allocation guard;
+- no comprehensive golden-audio regression suite;
+- incomplete cross-host/plugin-format validation.
 
-See `docs/ROADMAP.md` for the public development sequence.
+## Next experiment actions
+
+1. Add lifecycle transition/invariant tests.
+2. Add musical-time policy scheduling without syntax design.
+3. Test a second structurally different stateful process.
+4. Make history policy audibly consequential.
+5. Compare the same lifecycle cases directly with idiomatic SuperCollider NodeProxy/JITLib and Max/MSP constructions.
+6. Reject/demote the candidate if it proves to be only packaging around ordinary gates/muting/routing.
+7. Only if it survives, design the smallest semantic AST/IR before considering user-facing syntax.
+
+## Ownership
+
+- implementation/tests/examples/releases: this repository;
+- private theory/design/prior-art/publication strategy: `krahd/research/projects/audio_scripter/`;
+- future distinct manuscripts: `krahd/research/academic-writing/my_papers_<year>/`;
+- global state/relationships: `krahd/tom-work-admin`.
