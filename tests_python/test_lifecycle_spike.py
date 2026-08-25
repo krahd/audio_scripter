@@ -1,11 +1,13 @@
 import importlib.util
 from pathlib import Path
+import sys
 
 
 MODULE_PATH = Path(__file__).resolve().parents[1] / "tools" / "lifecycle_spike.py"
 SPEC = importlib.util.spec_from_file_location("lifecycle_spike", MODULE_PATH)
 assert SPEC is not None and SPEC.loader is not None
 lifecycle_spike = importlib.util.module_from_spec(SPEC)
+sys.modules[SPEC.name] = lifecycle_spike
 SPEC.loader.exec_module(lifecycle_spike)
 
 
