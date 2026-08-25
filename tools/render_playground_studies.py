@@ -8,7 +8,7 @@ from __future__ import annotations
 from pathlib import Path
 import argparse
 
-from lifecycle_spike import FREEZE, HISTORY_ONLY, NORMAL, SILENT_EVOLUTION, TAIL, Lifecycle, InputPolicy, StatePolicy, OutputPolicy, HistoryPolicy, ObservationPolicy
+from lifecycle_spike import FREEZE, NORMAL, SILENT_EVOLUTION, TAIL, Lifecycle, InputPolicy, StatePolicy, OutputPolicy, HistoryPolicy, ObservationPolicy
 from playground_v0 import (
     Chain,
     DelayMemory,
@@ -25,6 +25,7 @@ from playground_v0 import (
     write_trace_csv,
     write_wav,
 )
+from playground_v0_events import ScheduledIntervention, render_with_interventions
 
 
 REMEMBER_SILENT = Lifecycle(
@@ -41,7 +42,6 @@ def p1_variant(name: str, variant: str) -> Study:
     process = FeedbackMemory("memory", decay=0.992, history_size=12000)
 
     if variant == "a":
-        # Four sections: normal -> periodic tails -> periodic freezes -> normal/silent reveals.
         policy = section_policy([
             (0, 16, constant(NORMAL)),
             (16, 32, every(4, offset_beats=2, length_beats=1, lifecycle=TAIL)),
@@ -68,6 +68,30 @@ def p1_variant(name: str, variant: str) -> Study:
     return Study(name, duration_beats=64, bpm=120, source=synthetic_source, chain=Chain(TransformNode(process, policy)))
 
 
+def p1_interventions(variant: str) -> list[ScheduledIntervention]:
+    if variant == "a":
+        beats = (49.0, 57.0)
+        amount = 0.22
+    elif variant == "b":
+        beats = (44.0, 50.0, 58.0)
+        amount = 0.5
+    elif variant == "c":
+        beats = (48.0, 52.0, 60.0)
+        amount = 0.7
+    else:
+        raise ValueError(variant)
+
+    return [
+        ScheduledIntervention(
+            beat=beat,
+            identity="memory",
+            action=lambda process, a=amount: process.inject_recent_history(fraction_ago=0.0, amount=a),
+            label=f"reveal-recent-history-{index + 1}",
+        )
+        for index, beat in enumerate(beats)
+    ]
+
+
 def p2() -> Study:
     a = FeedbackMemory("A", decay=0.991, history_size=9000)
     b = ResonantMemory("B", frequency=247.0, damping=0.998)
@@ -88,6 +112,13 @@ def p2() -> Study:
     return Study("p2", 64, 120, synthetic_source, Chain(TransformNode(a, a_policy), TransformNode(b, b_policy)))
 
 
+def p2_interventions() -> list[ScheduledIntervention]:
+    return [
+        ScheduledIntervention(beat=48.0, identity="A", action=lambda process: process.inject_recent_history(0.0, 0.45), label="A-reveal-history"),
+        ScheduledIntervention(beat=56.0, identity="A", action=lambda process: process.inject_recent_history(0.25, 0.4), label="A-reveal-older-history"),
+    ]
+
+
 def p3_variant(name: str, variant: str) -> Study:
     process = DelayMemory("responsive-memory", delay_samples=3200, feedback=0.65)
 
@@ -96,7 +127,6 @@ def p3_variant(name: str, variant: str) -> Study:
     elif variant == "b":
         policy = when_activity_above(0.19, SILENT_EVOLUTION, otherwise=NORMAL)
     elif variant == "c":
-        # Signal-responsive base interrupted by deterministic musical-time freeze.
         responsive = when_activity_above(0.19, TAIL, otherwise=NORMAL)
         timed = every(8, offset_beats=6, length_beats=1.5, lifecycle=FREEZE)
 
@@ -122,6 +152,19 @@ def studies() -> list[Study]:
     ]
 
 
+def interventions_for(study: Study) -> list[ScheduledIntervention]:
+    if study.name.startswith("p1"):
+        return p1_interventions(study.name[-1])
+    if study.name == "p2":
+        return p2_interventions()
+    return []
+
+
+def render_study(study: Study):
+    interventions = interventions_for(study)
+    return render_with_interventions(study, interventions) if interventions else render(study)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--out", type=Path, default=Path("playground_renders"))
@@ -130,7 +173,7 @@ def main() -> None:
 
     selected = [s for s in studies() if not args.only or s.name in set(args.only)]
     for study in selected:
-        result = render(study)
+        result = render_study(study)
         write_wav(args.out / f"{study.name}.wav", result.samples, study.sample_rate)
         write_trace_csv(args.out / f"{study.name}.csv", result.trace)
         print(f"{study.name}: {len(result.samples)} samples, {len(result.trace)} trace rows")
