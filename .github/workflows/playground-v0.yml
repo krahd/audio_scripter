@@ -1,0 +1,24 @@
+name: playground-v0
+
+on:
+  push:
+    branches:
+      - research/playground-v0
+  workflow_dispatch:
+
+jobs:
+  playground:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install pytest
+        run: python -m pip install pytest
+      - name: Run lifecycle and playground tests
+        run: python -m pytest -q tests_python/test_lifecycle_spike.py tests_python/test_playground_v0.py
+      - name: Render playground studies
+        run: python tools/render_playground_studies.py --out /tmp/playground-renders
+      - name: List outputs
+        run: find /tmp/playground-renders -maxdepth 1 -type f -printf '%f %s bytes\n' | sort
