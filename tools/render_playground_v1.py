@@ -12,6 +12,7 @@ from pathlib import Path
 import argparse
 
 from playground_v0 import ActivityFollower, Observation, RenderContext, synthetic_source, write_trace_csv, write_wav
+from playground_sources import wav_source
 from playground_v1 import (
     FREEZE,
     NORMAL,
@@ -268,10 +269,13 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--out", type=Path, default=Path("playground_v1_renders"))
     parser.add_argument("--only", action="append", default=[])
+    parser.add_argument("--input", type=Path, help="optional PCM WAV source; loops for the study duration")
     args = parser.parse_args()
 
     selected = [s for s in studies() if not args.only or s.name in set(args.only)]
     for study in selected:
+        if args.input is not None:
+            study.source = wav_source(args.input, output_sample_rate=study.sample_rate, loop=True)
         result = render_v1(study)
         write_wav(args.out / f"{study.name}.wav", result.samples, study.sample_rate)
         write_trace_csv(args.out / f"{study.name}.csv", result.trace)
