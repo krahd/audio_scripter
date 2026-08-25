@@ -57,18 +57,24 @@ HISTORY_ONLY = Lifecycle(
     history=HistoryPolicy.ACCUMULATE,
     observation=ObservationPolicy.ADVANCE,
 )
+HOLD_ALL = Lifecycle(
+    input=InputPolicy.BLOCK,
+    state=StatePolicy.FREEZE,
+    output=OutputPolicy.SILENT,
+    history=HistoryPolicy.HOLD,
+    observation=ObservationPolicy.HOLD,
+)
+OBSERVE_ONLY = Lifecycle(
+    input=InputPolicy.BLOCK,
+    state=StatePolicy.FREEZE,
+    output=OutputPolicy.SILENT,
+    history=HistoryPolicy.HOLD,
+    observation=ObservationPolicy.ADVANCE,
+)
 
 
 class ReferenceTransformation:
-    """A deliberately simple stateful process used to expose policy differences.
-
-    The processor is a one-pole feedback accumulator:
-
-        state[n] = decay * state[n-1] + admitted_input[n]
-
-    It is not intended as an audio effect design. It gives state evolution a clear,
-    deterministic audible consequence while keeping the lifecycle semantics visible.
-    """
+    """One-state feedback process used to expose lifecycle-policy differences."""
 
     def __init__(
         self,
@@ -93,8 +99,6 @@ class ReferenceTransformation:
         self.samples_processed = 0
 
     def process_sample(self, x: float, lifecycle: Lifecycle = NORMAL) -> float:
-        """Advance one reference sample under the supplied lifecycle policy."""
-
         if lifecycle.history is HistoryPolicy.ACCUMULATE:
             self.history[self.history_pos] = x
             self.history_pos = (self.history_pos + 1) % len(self.history)
@@ -111,13 +115,65 @@ class ReferenceTransformation:
             self.state = self.decay * self.state + admitted_input
         elif lifecycle.state is StatePolicy.FREEZE:
             pass
-        else:  # pragma: no cover - defensive against future enum extension
+        else:  # pragma: no cover
             raise AssertionError(f"unsupported state policy: {lifecycle.state}")
 
         self.samples_processed += 1
         return self.state if lifecycle.output is OutputPolicy.AUDIBLE else 0.0
 
     def recent_history(self) -> tuple[float, ...]:
-        """Return history in chronological order, oldest to newest."""
-
         return tuple(self.history[self.history_pos :] + self.history[: self.history_pos])
+
+
+class MemoryTransformation:
+    """Different stateful process whose audible result explicitly reads owned history.
+
+    `history` stores incoming material. `read_phase` is independent processing state.
+    This lets the spike test whether history may evolve while processing state is frozen
+    and later become audible.
+    """
+
+    def __init__(self, *, history_size: int = 4) -> None:
+        if history_size < 1:
+            raise ValueError("history_size must be positive")
+        self.history = [0.0] * history_size
+        self.history_pos = 0
+        self.read_phase = 0
+        self.observation = 0.0
+
+    def process_sample(self, x: float, lifecycle: Lifecycle = NORMAL) -> float:
+        if lifecycle.history is HistoryPolicy.ACCUMULATE:
+            self.history[self.history_pos] = x
+            self.history_pos = (self.history_pos + 1) % len(self.history)
+
+        if lifecycle.observation is ObservationPolicy.ADVANCE:
+            self.observation = 0.5 * self.observation + 0.5 * abs(x)
+
+        if lifecycle.state is StatePolicy.RESET:
+            self.read_phase = 0
+        elif lifecycle.state is StatePolicy.ADVANCE:
+            self.read_phase = (self.read_phase + 1) % len(self.history)
+        elif lifecycle.state is StatePolicy.FREEZE:
+            pass
+        else:  # pragma: no cover
+            raise AssertionError(f"unsupported state policy: {lifecycle.state}")
+
+        ordered = self.history[self.history_pos :] + self.history[: self.history_pos]
+        value = ordered[self.read_phase]
+        return value if lifecycle.output is OutputPolicy.AUDIBLE else 0.0
+
+
+class BeatPolicy:
+    """Tiny musical-time policy source independent of transformation state."""
+
+    def __init__(self, *, beats_per_bar: int = 4) -> None:
+        self.beats_per_bar = beats_per_bar
+
+    def at(self, beat_index: int) -> Lifecycle:
+        bar = beat_index // self.beats_per_bar
+        beat = beat_index % self.beats_per_bar
+        if bar % 4 == 3:
+            return FREEZE
+        if beat in (2, 3):
+            return TAIL
+        return NORMAL
