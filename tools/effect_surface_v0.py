@@ -72,8 +72,10 @@ def render_sketch(sketch: EffectSketch, *, name: str = "effect") -> str:
     if lines:
         lines.append("")
 
-    lines.append(f"effect {name}:")
-    lines.append(f"    {_render_sketch_expr(sketch.root)}")
+    # The explicit in/out frame keeps the projection visibly effect-centred rather than
+    # resembling a generic transformation-expression pretty-printer.
+    lines.append(f"effect {name}(in):")
+    lines.append(f"    in -> {_render_sketch_expr(sketch.root)} -> out")
     return "\n".join(lines)
 
 
@@ -104,6 +106,12 @@ def render_transformation(
     return _render_transform_expr(transformation.expr, parent_op)
 
 
+def _render_location(path: tuple[int, ...]) -> str:
+    if not path:
+        return "effect body"
+    return ".".join(f"stage[{index}]" for index in path)
+
+
 @dataclass(frozen=True)
 class StructuralChange:
     path: tuple[int, ...]
@@ -111,8 +119,7 @@ class StructuralChange:
     after: str
 
     def render(self) -> str:
-        location = "root" if not self.path else ".".join(str(index) for index in self.path)
-        return f"{location}: {self.before} -> {self.after}"
+        return f"{_render_location(self.path)}: {self.before} -> {self.after}"
 
 
 def _transformation_children(transformation: Transformation) -> tuple[Transformation, ...]:
