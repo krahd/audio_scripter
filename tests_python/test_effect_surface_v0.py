@@ -32,7 +32,7 @@ class TestEffectSurfaceV0(unittest.TestCase):
         )
         self.assertNotIn("|>", rendered)
 
-    def test_concrete_abstraction_projects_default_slots_without_changing_body_shape(self):
+    def test_concrete_abstraction_projects_defaults_inside_explicit_audio_effect_frame(self):
         sketch = (
             EffectSketch.from_transformation(self.effect)
             .abstract_transformation((1,), "space")
@@ -43,8 +43,9 @@ class TestEffectSurfaceV0(unittest.TestCase):
 
         self.assertIn("slot space = reverb(size=0.7)", rendered)
         self.assertIn("slot recurrence = 0.6", rendered)
+        self.assertIn("effect found(in):", rendered)
         self.assertIn(
-            "delay(distance=0.25, feedback=recurrence) -> space -> saturate(drive=0.3)",
+            "in -> delay(distance=0.25, feedback=recurrence) -> space -> saturate(drive=0.3) -> out",
             rendered,
         )
 
@@ -64,13 +65,13 @@ class TestEffectSurfaceV0(unittest.TestCase):
         self.assertEqual(changes[0].before, "reverb(size=0.7)")
         self.assertIn("parallel(", changes[0].after)
 
-    def test_parameter_change_is_reported_at_primitive_location(self):
+    def test_parameter_change_is_reported_at_readable_stage_location(self):
         sketch = EffectSketch.from_transformation(self.effect).abstract_value((0,), "feedback", "recurrence")
         variant = sketch.instantiate(recurrence=0.9)
 
         rendered = render_structural_diff(self.effect, variant)
 
-        self.assertIn("0:", rendered)
+        self.assertIn("stage[0]:", rendered)
         self.assertIn("feedback=0.6", rendered)
         self.assertIn("feedback=0.9", rendered)
 
@@ -94,7 +95,7 @@ class TestEffectSurfaceV0(unittest.TestCase):
         self.assertIn("variant dryer:", rendered)
         self.assertIn("variant cloud:", rendered)
         self.assertIn("changes:", rendered)
-        self.assertIn("1: reverb(size=0.7)", rendered)
+        self.assertIn("stage[1]: reverb(size=0.7)", rendered)
 
 
 if __name__ == "__main__":
