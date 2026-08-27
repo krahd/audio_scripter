@@ -23,6 +23,7 @@ jobs:
           tests_python/test_playground_v0.py
           tests_python/test_playground_v1.py
           tests_python/test_effect_ir_v0.py
+          tests_python/test_effect_ir_v1.py
       - name: Render playground v0 studies
         run: python tools/render_playground_studies.py --out /tmp/playground-renders/v0
       - name: Render playground v1 studies
