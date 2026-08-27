@@ -17,7 +17,7 @@ import argparse
 import math
 from typing import Iterable, Protocol
 
-from effect_ir_v1 import Transformation
+from effect_ir_v1 import Transformation, compose, primitive
 from effect_sketch_v0 import EffectSketch
 from playground_sources import read_wav_mono
 from playground_v0 import write_wav
@@ -62,10 +62,20 @@ class Lowpass:
 
 
 class Delay:
-    def __init__(self, distance_seconds: float, feedback: float, sample_rate: int):
+    def __init__(
+        self,
+        distance_seconds: float,
+        feedback: float,
+        sample_rate: int,
+        *,
+        mix: float = 0.5,
+    ):
         if distance_seconds < 0:
             raise ValueError("delay distance must be non-negative")
+        if not 0.0 <= mix <= 1.0:
+            raise ValueError("delay mix must be in [0, 1]")
         self.feedback = float(feedback)
+        self.mix = float(mix)
         self.size = max(1, int(round(distance_seconds * sample_rate)))
         self.buffer = [0.0] * self.size
         self.index = 0
@@ -74,7 +84,7 @@ class Delay:
         delayed = self.buffer[self.index]
         self.buffer[self.index] = value + delayed * self.feedback
         self.index = (self.index + 1) % self.size
-        return delayed
+        return value * (1.0 - self.mix) + delayed * self.mix
 
 
 class Reverb:
@@ -85,7 +95,7 @@ class Reverb:
         decay = max(0.0, min(float(decay), 0.98))
         base_ms = [29.7, 37.1, 41.1, 43.7]
         self.combs = [
-            Delay((ms * size) / 1000.0, decay, sample_rate)
+            Delay((ms * size) / 1000.0, decay, sample_rate, mix=1.0)
             for ms in base_ms
         ]
         self.wet = min(0.85, 0.2 + size * 0.35)
@@ -146,7 +156,12 @@ def compile_processor(transformation: Transformation, *, sample_rate: int) -> Pr
         distance = params.get("distance", params.get("seconds", 0.25))
         if not isinstance(distance, (int, float)):
             raise TypeError("audition delay distance must currently be numeric seconds")
-        return Delay(float(distance), float(params.get("feedback", 0.35)), sample_rate)
+        return Delay(
+            float(distance),
+            float(params.get("feedback", 0.35)),
+            sample_rate,
+            mix=float(params.get("mix", 0.5)),
+        )
     if name == "reverb":
         return Reverb(
             float(params.get("size", 0.7)),
@@ -213,26 +228,27 @@ def main() -> None:
     parser.add_argument("output", type=Path)
     parser.add_argument("--delay", type=float, default=0.24, help="delay seconds")
     parser.add_argument("--feedback", type=float, default=0.55)
+    parser.add_argument("--delay-mix", type=float, default=0.45)
     parser.add_argument("--reverb-size", type=float, default=0.65)
     parser.add_argument("--reverb-decay", type=float, default=0.72)
     parser.add_argument("--drive", type=float, default=0.15)
     parser.add_argument("--tail", type=float, default=2.0)
     args = parser.parse_args()
 
-    effect = Transformation(
-        name="audition",
-        expr=__import__("effect_ir_v1").TransformExpr(
-            "compose",
-            (
-                __import__("effect_ir_v1").primitive(
-                    "delay", distance=args.delay, feedback=args.feedback
-                ),
-                __import__("effect_ir_v1").primitive(
-                    "reverb", size=args.reverb_size, decay=args.reverb_decay
-                ),
-                __import__("effect_ir_v1").primitive("saturate", drive=args.drive),
-            ),
+    effect = compose(
+        primitive(
+            "delay",
+            distance=args.delay,
+            feedback=args.feedback,
+            mix=args.delay_mix,
         ),
+        primitive(
+            "reverb",
+            size=args.reverb_size,
+            decay=args.reverb_decay,
+        ),
+        primitive("saturate", drive=args.drive),
+        name="audition",
     )
     render_wav(effect, args.input, args.output, tail_seconds=args.tail)
 
