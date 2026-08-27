@@ -16,7 +16,7 @@ jobs:
           python-version: '3.12'
       - name: Install pytest
         run: python -m pip install pytest
-      - name: Run lifecycle, playground, effect-IR, and effect-sketch tests
+      - name: Run lifecycle, playground, effect-IR, sketch, and surface tests
         run: >-
           python -m pytest -q
           tests_python/test_lifecycle_spike.py
@@ -25,6 +25,7 @@ jobs:
           tests_python/test_effect_ir_v0.py
           tests_python/test_effect_ir_v1.py
           tests_python/test_effect_sketch_v0.py
+          tests_python/test_effect_surface_v0.py
       - name: Render playground v0 studies
         run: python tools/render_playground_studies.py --out /tmp/playground-renders/v0
       - name: Render playground v1 studies
