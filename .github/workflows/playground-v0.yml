@@ -27,13 +27,26 @@ jobs:
           tests_python/test_effect_sketch_v0.py
           tests_python/test_effect_surface_v0.py
           tests_python/test_effect_audition_v0.py
+      - name: Render recognisable-audio T4 authoring workflow demo
+        run: >-
+          python tools/render_t4_authoring_demo.py
+          "test Project/Samples/Processed/Bounce/Bounce 1-E-Piano Basic [2026-05-06 064550]-1.wav"
+          /tmp/effect-authoring-t4-demo
+      - name: List T4 demo outputs
+        run: find /tmp/effect-authoring-t4-demo -type f -printf '%P %s bytes\n' | sort
+      - name: Upload T4 authoring demo
+        uses: actions/upload-artifact@v4
+        with:
+          name: effect-authoring-t4-demo
+          path: /tmp/effect-authoring-t4-demo
+          if-no-files-found: error
       - name: Render playground v0 studies
         run: python tools/render_playground_studies.py --out /tmp/playground-renders/v0
       - name: Render playground v1 studies
         run: python tools/render_playground_v1.py --out /tmp/playground-renders/v1
-      - name: List outputs
+      - name: List historical playground outputs
         run: find /tmp/playground-renders -type f -printf '%P %s bytes\n' | sort
-      - name: Upload listening renders
+      - name: Upload historical playground renders
         uses: actions/upload-artifact@v4
         with:
           name: playground-listening-renders
